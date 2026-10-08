@@ -1,29 +1,75 @@
 import Foundation
 
 func fail(_ message: String) -> Never {
+    fflush(stdout)
     FileHandle.standardError.write(Data((message + "\n").utf8))
     exit(1)
 }
 
-guard CommandLine.arguments.count == 2 else {
-    fail("Usage: PitLane <archivo.txt>")
+var arguments = Array(CommandLine.arguments.dropFirst())
+let soloSalida = arguments.contains("--solo-salida")
+arguments.removeAll { $0 == "--solo-salida" }
+
+guard arguments.count == 1 else {
+    fail("Usage: PitLane [--solo-salida] <archivo.txt>")
 }
 
-let path = CommandLine.arguments[1]
+let path = arguments[0]
 guard let source = try? String(contentsOfFile: path, encoding: .utf8) else {
     fail("Error: cannot read file '\(path)'")
 }
 
-var lexer = Lexer(source: source)
-do {
-    let tokens = try lexer.tokenize()
-    for token in tokens where token.type != .newline {
-        print("[line \(token.line)] \(token.type.rawValue) \(token.lexeme)")
-    }
-    _ = try Parser(tokens: tokens).parseProgram()
-    print("Syntax OK")
-} catch let error as LexicalError {
-    fail(error.description)
-} catch let error as SyntaxError {
-    fail(error.description)
+func header(_ title: String, first: Bool = false) {
+    guard !soloSalida else { return }
+    if !first { print("") }
+    print("=== \(title) ===")
 }
+
+func runPipeline() {
+    header("Tokens", first: true)
+    var lexer = Lexer(source: source)
+    let tokens: [Token]
+    do {
+        tokens = try lexer.tokenize()
+    } catch let error as LexicalError {
+        fail(error.description)
+    } catch {
+        fail("\(error)")
+    }
+    if !soloSalida {
+        for token in tokens where token.type != .newline {
+            print("[line \(token.line)] \(token.type.rawValue) \(token.lexeme)")
+        }
+    }
+
+    header("Sintaxis")
+    let program: Program
+    do {
+        program = try Parser(tokens: tokens).parseProgram()
+    } catch let error as SyntaxError {
+        fail(error.description)
+    } catch {
+        fail("\(error)")
+    }
+    if !soloSalida { print("Syntax OK") }
+
+    header("Salida")
+    do {
+        try Interpreter().run(program)
+    } catch let error as RuntimeError {
+        fail("Runtime error on line \(error.line): \(display(error.value))")
+    } catch {
+        fail("\(error)")
+    }
+}
+
+// La recursión profunda necesita más pila que el hilo principal.
+let finished = DispatchSemaphore(value: 0)
+let worker = Thread {
+    runPipeline()
+    finished.signal()
+}
+worker.stackSize = 512 * 1024 * 1024
+worker.start()
+finished.wait()
+exit(0)
