@@ -1,0 +1,7 @@
+// Secuencias de escape en strings: \n \t \" \\
+transmision("linea1\nlinea2")
+transmision("columna1\tcolumna2")
+transmision("El piloto dijo \"vamos\"")
+transmision("ruta\\pista")
+transmision(longitud("a\tb"))
+transmision("Boxes:\t\"Ferrari\"\\\nlisto")

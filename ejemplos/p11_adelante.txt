@@ -1,0 +1,25 @@
+// Uso antes de la definicion: funciones y clases se usan antes de declararlas
+parrilla resultado acelera saludar(3)
+parrilla piloto acelera debut Piloto("Hamilton", 44)
+transmision(resultado)
+transmision(piloto.presentar())
+transmision(triplicar(2))
+// Cadena: saludar llama a doblar y doblar llama a triplicar, definidas mas abajo
+boxes saludar(n):
+    meta doblar(n) + 1
+bandera_cuadros
+boxes doblar(n):
+    meta triplicar(n) + 1
+bandera_cuadros
+boxes triplicar(n):
+    meta n * 3
+bandera_cuadros
+escuderia Piloto:
+    ensamble(nombre, numero):
+        auto.nombre acelera nombre
+        auto.numero acelera numero
+    bandera_cuadros
+    boxes presentar():
+        meta auto.nombre + " #" + auto.numero
+    bandera_cuadros
+bandera_cuadros

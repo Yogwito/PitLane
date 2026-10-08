@@ -1,0 +1,24 @@
+// Identificadores y textos con letras Unicode (ñ, tildes)
+parrilla año acelera 2026
+pole número acelera 7
+parrilla descripción acelera "Carrera de niño"
+boxes calcularPuntaje(número, año):
+    meta número * 10 + año - 2000
+bandera_cuadros
+escuderia Piloto:
+    ensamble(nombre):
+        auto.nombre acelera nombre
+        auto.año acelera 2026
+    bandera_cuadros
+    boxes saludo():
+        meta "Hola, " + auto.nombre
+    bandera_cuadros
+bandera_cuadros
+parrilla niñoPiloto acelera debut Piloto("José")
+transmision(año)
+transmision(número)
+transmision(descripción)
+transmision(calcularPuntaje(número, año))
+transmision(niñoPiloto.saludo())
+transmision(niñoPiloto.nombre)
+transmision(niñoPiloto.año)

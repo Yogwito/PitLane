@@ -1,0 +1,4 @@
+// ERROR en la linea 3: las variables no se elevan; x se usa antes de su parrilla
+transmision("antes")
+transmision(x)
+parrilla x acelera 1
