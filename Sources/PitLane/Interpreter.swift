@@ -18,12 +18,35 @@ final class Interpreter {
     // MARK: - Sentencias
 
     private func execBlock(_ statements: Block, _ env: Environment) throws -> Completion {
+        try hoistDeclarations(statements, env)
         for statement in statements {
             let completion = try exec(statement, env)
             if case .normal = completion { continue }
             return completion
         }
         return .normal
+    }
+
+    /// Registra boxes y escuderia del bloque antes de ejecutarlo, para poder usarlos
+    /// antes de su definición. Las variables (parrilla/pole) no se elevan.
+    private func hoistDeclarations(_ statements: Block, _ env: Environment) throws {
+        for statement in statements {
+            switch statement.kind {
+            case .function(let decl):
+                try env.declare(
+                    decl.name, .function(Closure(decl: decl, env: env)), line: statement.line)
+            case .classDecl(let decl):
+                var methods: [String: Closure] = [:]
+                for method in decl.methods {
+                    methods[method.name] = Closure(decl: method, env: env)
+                }
+                let cls = ClassDef(
+                    name: decl.name, constructor: decl.constructor, methods: methods, env: env)
+                try env.declare(decl.name, .classDef(cls), line: statement.line)
+            default:
+                break
+            }
+        }
     }
 
     private func exec(_ stmt: Stmt, _ env: Environment) throws -> Completion {
@@ -103,19 +126,8 @@ final class Interpreter {
             print(display(try eval(expr, env)))
             return .normal
 
-        case .function(let decl):
-            try env.declare(decl.name, .function(Closure(decl: decl, env: env)), line: line)
-            return .normal
-
-        case .classDecl(let decl):
-            var methods: [String: Closure] = [:]
-            for method in decl.methods {
-                methods[method.name] = Closure(decl: method, env: env)
-            }
-            let cls = ClassDef(
-                name: decl.name, constructor: decl.constructor, methods: methods, env: env)
-            try env.declare(decl.name, .classDef(cls), line: line)
-            return .normal
+        case .function, .classDecl:
+            return .normal  // ya registradas por hoistDeclarations
 
         case .tryCatch(let body, let errorName, let handler, let finallyBlock):
             var result = Completion.normal
