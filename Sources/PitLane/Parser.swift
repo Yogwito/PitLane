@@ -5,7 +5,7 @@ struct SyntaxError: Error {
     var description: String { "Syntax error on line \(line): \(message)" }
 }
 
-/// Descenso recursivo: una función por regla de la gramática del CLAUDE.md.
+/// Descenso recursivo: una función por regla, según la gramática EBNF de PitLane.
 final class Parser {
     private let tokens: [Token]
     private var pos = 0
