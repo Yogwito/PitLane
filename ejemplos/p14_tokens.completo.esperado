@@ -1,0 +1,19 @@
+=== Tokens ===
+[line 2] KW_PARRILLA parrilla
+[line 2] ID pi
+[line 2] KW_ACELERA acelera
+[line 2] REAL_NUMBER 3.14
+[line 3] KW_TRANSMISION transmision
+[line 3] LPAREN (
+[line 3] STRING a\tb
+[line 3] PLUS +
+[line 3] ID pi
+[line 3] STAR *
+[line 3] INT_NUMBER 2
+[line 3] RPAREN )
+
+=== Sintaxis ===
+Syntax OK
+
+=== Salida ===
+a	b6.28

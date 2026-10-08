@@ -1,0 +1,27 @@
+=== Tokens ===
+[line 1] KW_PARRILLA parrilla
+[line 1] ID x
+[line 1] KW_ACELERA acelera
+[line 1] INT_NUMBER 20
+[line 2] KW_BANDERA_VERDE bandera_verde
+[line 2] ID x
+[line 2] KW_SUPERA supera
+[line 2] INT_NUMBER 5
+[line 2] COLON :
+[line 3] KW_TRANSMISION transmision
+[line 3] LPAREN (
+[line 3] STRING Mayor que 5
+[line 3] RPAREN )
+[line 4] KW_BANDERA_AZUL bandera_azul
+[line 4] COLON :
+[line 5] KW_TRANSMISION transmision
+[line 5] LPAREN (
+[line 5] STRING Menor o igual que 5
+[line 5] RPAREN )
+[line 6] KW_BANDERA_CUADROS bandera_cuadros
+
+=== Sintaxis ===
+Syntax OK
+
+=== Salida ===
+Mayor que 5

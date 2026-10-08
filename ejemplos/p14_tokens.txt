@@ -1,0 +1,3 @@
+// tokens: real, string con escape, operador y comentario
+parrilla pi acelera 3.14 // comentario al final
+transmision("a\tb" + pi * 2)
