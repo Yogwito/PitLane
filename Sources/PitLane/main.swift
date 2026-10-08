@@ -25,6 +25,22 @@ func header(_ title: String, first: Bool = false) {
     print("=== \(title) ===")
 }
 
+/// Los strings ya interpretados se muestran con sus escapes para mantener una sola línea por token.
+func printable(_ token: Token) -> String {
+    guard token.type == .string else { return token.lexeme }
+    var out = ""
+    for c in token.lexeme {
+        switch c {
+        case "\n": out += "\\n"
+        case "\t": out += "\\t"
+        case "\"": out += "\\\""
+        case "\\": out += "\\\\"
+        default: out.append(c)
+        }
+    }
+    return out
+}
+
 func runPipeline() {
     header("Tokens", first: true)
     var lexer = Lexer(source: source)
@@ -38,7 +54,7 @@ func runPipeline() {
     }
     if !soloSalida {
         for token in tokens where token.type != .newline {
-            print("[line \(token.line)] \(token.type.rawValue) \(token.lexeme)")
+            print("[line \(token.line)] \(token.type.rawValue) \(printable(token))")
         }
     }
 

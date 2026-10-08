@@ -76,6 +76,20 @@ struct Lexer {
                 return Token(type: .string, lexeme: text, line: startLine)
             }
             if c == "\n" { break }
+            if c == "\\" {
+                guard let escaped = peek(1), escaped != "\n" else { break }
+                switch escaped {
+                case "n": text.append("\n")
+                case "t": text.append("\t")
+                case "\"": text.append("\"")
+                case "\\": text.append("\\")
+                default:
+                    throw LexicalError(
+                        line: line, message: "invalid escape sequence '\\\(escaped)'")
+                }
+                pos += 2
+                continue
+            }
             text.append(c)
             pos += 1
         }
