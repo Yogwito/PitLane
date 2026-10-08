@@ -1,0 +1,3 @@
+// ERROR en la linea 3: expresion incompleta, falta un operando despues de '+'
+parrilla a acelera 1
+parrilla x acelera 5 +

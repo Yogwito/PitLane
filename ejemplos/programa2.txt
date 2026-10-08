@@ -1,0 +1,15 @@
+// Suma de los elementos de una lista
+boxes sumar(lista, n):
+    parrilla total acelera 0
+    circuito i salida 0 llegada n - 1:
+        total acelera total + lista[i]
+    bandera_cuadros
+    meta total
+bandera_cuadros
+parrilla numeros acelera [4, 8, 15, 16]
+parrilla resultado acelera sumar(numeros, 4)
+bandera_verde resultado supera 40 aliado resultado rezaga 50:
+    transmision("La suma es " + resultado)
+bandera_azul:
+    transmision("Fuera de rango")
+bandera_cuadros

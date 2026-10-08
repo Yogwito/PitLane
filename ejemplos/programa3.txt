@@ -1,0 +1,23 @@
+// Clases y manejo de excepciones
+escuderia Cuenta:
+    ensamble(titular, saldo):
+        auto.titular acelera titular
+        auto.saldo acelera saldo
+    bandera_cuadros
+    boxes retirar(valor):
+        bandera_verde valor supera auto.saldo:
+            penalizacion "Saldo insuficiente"
+        bandera_cuadros
+        auto.saldo acelera auto.saldo - valor
+        meta auto.saldo
+    bandera_cuadros
+bandera_cuadros
+parrilla c acelera debut Cuenta("Ana", 100)
+safety_car:
+    transmision("Nuevo saldo: " + c.retirar(30))
+    transmision("Nuevo saldo: " + c.retirar(200))
+accidente error:
+    transmision("Error: " + error)
+podio:
+    transmision("Operacion terminada")
+bandera_cuadros

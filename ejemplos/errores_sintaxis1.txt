@@ -1,0 +1,4 @@
+// ERROR en la linea 4: falta el bandera_cuadros del bandera_verde (se detecta al llegar al fin del archivo)
+parrilla x acelera 5
+bandera_verde x supera 3:
+    transmision("hola")
