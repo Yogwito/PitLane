@@ -1,8 +1,15 @@
 import Foundation
 
-func fail(_ message: String) -> Never {
-    fflush(stdout)
+/// Errores de uso de la línea de comandos: van por stderr.
+func failUsage(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
+    exit(1)
+}
+
+/// Errores léxicos, de sintaxis y de ejecución: van por stdout, en orden con la salida del programa.
+func fail(_ message: String) -> Never {
+    print(message)
+    fflush(stdout)
     exit(1)
 }
 
@@ -11,12 +18,12 @@ let soloSalida = arguments.contains("--solo-salida")
 arguments.removeAll { $0 == "--solo-salida" }
 
 guard arguments.count == 1 else {
-    fail("Usage: PitLane [--solo-salida] <archivo.txt>")
+    failUsage("Usage: PitLane [--solo-salida] <archivo.txt>")
 }
 
 let path = arguments[0]
 guard let source = try? String(contentsOfFile: path, encoding: .utf8) else {
-    fail("Error: cannot read file '\(path)'")
+    failUsage("Error: cannot read file '\(path)'")
 }
 
 func header(_ title: String, first: Bool = false) {
