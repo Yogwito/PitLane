@@ -1,0 +1,4 @@
+// ERROR en la linea 3: simbolo no reconocido '#'
+parrilla x acelera 10
+# esto es un simbolo invalido
+transmision(x)

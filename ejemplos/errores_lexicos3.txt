@@ -1,0 +1,2 @@
+// ERROR en la linea 2: secuencia de escape invalida \q
+transmision("hola\qmundo")

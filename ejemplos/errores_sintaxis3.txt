@@ -1,0 +1,4 @@
+// ERROR en la linea 4: bandera_cuadros sobrante sin bloque que cerrar
+parrilla x acelera 1
+transmision(x)
+bandera_cuadros

@@ -1,0 +1,5 @@
+// ERROR: bloque sin cerrar al llegar al final del archivo (se reporta en la linea 5, la ultima)
+parrilla n acelera 3
+vuelta n supera 0:
+    transmision(n)
+    n acelera n - 1
