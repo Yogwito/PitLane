@@ -25,9 +25,16 @@ struct Lexer {
         return a >= 48 && a <= 57
     }
 
+    /// Inicio de ID: [\p{L}_]
     private static func isLetter(_ c: Character?) -> Bool {
-        guard let c = c, let a = c.asciiValue else { return false }
-        return (a >= 65 && a <= 90) || (a >= 97 && a <= 122) || a == 95
+        guard let c = c else { return false }
+        return c == "_" || c.isLetter
+    }
+
+    /// Resto de un ID: [\p{L}\p{N}_]
+    private static func isWordPart(_ c: Character?) -> Bool {
+        guard let c = c else { return false }
+        return c == "_" || c.isLetter || c.isNumber
     }
 
     mutating func tokenize() throws -> [Token] {
@@ -111,7 +118,7 @@ struct Lexer {
 
     private mutating func readWord() -> Token {
         let start = pos
-        while Lexer.isLetter(peek()) || Lexer.isDigit(peek()) { pos += 1 }
+        while Lexer.isWordPart(peek()) { pos += 1 }
         let word = String(chars[start..<pos])
         return Token(type: keywords[word] ?? .id, lexeme: word, line: line)
     }
