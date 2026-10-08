@@ -1,0 +1,26 @@
+// Clases, ensamble, metodos y objetos con distinto estado
+escuderia Coche:
+    ensamble(nombre, vueltas):
+        auto.nombre acelera nombre
+        auto.vueltas acelera vueltas
+    bandera_cuadros
+    boxes describir():
+        meta auto.nombre + " con " + auto.vueltas + " vueltas"
+    bandera_cuadros
+    boxes sumarVuelta():
+        auto.vueltas acelera auto.vueltas + 1
+    bandera_cuadros
+    boxes doble():
+        auto.sumarVuelta()
+        auto.sumarVuelta()
+    bandera_cuadros
+bandera_cuadros
+parrilla a acelera debut Coche("Ferrari", 0)
+parrilla b acelera debut Coche("Mercedes", 5)
+a.doble()
+a.sumarVuelta()
+b.sumarVuelta()
+transmision(a.describir())
+transmision(b.describir())
+transmision(b.nombre)
+transmision(a)

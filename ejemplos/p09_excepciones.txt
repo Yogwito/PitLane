@@ -1,0 +1,45 @@
+// Excepciones: division por cero, indice, penalizacion, podio y anidamiento
+parrilla cero acelera 0
+safety_car:
+    transmision(10 / cero)
+accidente e:
+    transmision("Capturado: " + e)
+bandera_cuadros
+parrilla lista acelera [1, 2]
+safety_car:
+    transmision(lista[5])
+accidente e:
+    transmision("Indice: " + e)
+bandera_cuadros
+safety_car:
+    penalizacion "Exceso de velocidad"
+accidente e:
+    transmision("Penalizacion: " + e)
+bandera_cuadros
+safety_car:
+    penalizacion "Fuera de pista"
+accidente e:
+    transmision("Accidente: " + e)
+podio:
+    transmision("Podio ejecutado")
+bandera_cuadros
+safety_car:
+    safety_car:
+        parrilla x acelera 1 / 0
+    accidente e:
+        transmision("Interno: " + e)
+        penalizacion "Reenvio"
+    bandera_cuadros
+accidente f:
+    transmision("Externo: " + f)
+bandera_cuadros
+boxes calcular(n):
+    safety_car:
+        meta n * 2
+    accidente e:
+        meta 0
+    podio:
+        transmision("Podio antes de devolver")
+    bandera_cuadros
+bandera_cuadros
+transmision(calcular(4))

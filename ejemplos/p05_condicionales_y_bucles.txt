@@ -1,0 +1,28 @@
+// Condicionales y bucles
+parrilla n acelera 7
+bandera_verde n supera 5:
+    transmision("grande")
+bandera_amarilla n supera 2:
+    transmision("mediana")
+bandera_azul:
+    transmision("pequena")
+bandera_cuadros
+parrilla i acelera 1
+parrilla suma acelera 0
+vuelta i cede 4:
+    suma acelera suma + i
+    i acelera i + 1
+bandera_cuadros
+transmision(suma)
+transmision(i)
+parrilla pares acelera 0
+circuito k salida 1 llegada 10:
+    bandera_verde k supera 6:
+        bandera_roja
+    bandera_cuadros
+    bandera_verde k % 2 empata 1:
+        pit_stop
+    bandera_cuadros
+    pares acelera pares + k
+bandera_cuadros
+transmision(pares)

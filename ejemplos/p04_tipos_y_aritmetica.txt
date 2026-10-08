@@ -1,0 +1,31 @@
+// Tipos, aritmetica, comparaciones y logica
+parrilla entero acelera 42
+parrilla real acelera 3.5
+parrilla texto acelera "hola"
+parrilla bool acelera gana
+parrilla vacia
+pole limite acelera 10
+transmision(entero)
+transmision(real)
+transmision(texto)
+transmision(bool)
+transmision(vacia)
+transmision(limite)
+transmision(-entero)
+transmision(2 + 3 * 4)
+transmision((2 + 3) * 4)
+transmision(10 % 3)
+transmision(7 / 2)
+transmision(7.0 / 2)
+transmision(1 + 2.0)
+transmision("Vueltas: " + 3)
+transmision(5 supera 3)
+transmision(5 rezaga 3)
+transmision(5 alcanza 5)
+transmision(5 cede 4)
+transmision(5 empata 5)
+transmision(5 distinto 5)
+transmision("abc" rezaga "abd")
+transmision(pierde aliado gana)
+transmision(pierde rival gana)
+transmision(contra pierde)

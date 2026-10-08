@@ -1,0 +1,5 @@
+// ERROR en la linea 4: division por cero sin capturar
+transmision("antes")
+parrilla a acelera 10
+parrilla b acelera a / 0
+transmision("nunca se imprime")

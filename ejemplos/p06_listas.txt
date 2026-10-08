@@ -1,0 +1,17 @@
+// Listas: lectura, modificacion, longitud, agregar y errores de indice
+parrilla lista acelera [10, 20, 30]
+transmision(lista[1])
+lista[1] acelera 25
+transmision(lista)
+transmision(longitud(lista))
+agregar(lista, 40)
+transmision(lista)
+transmision(longitud(lista))
+parrilla nombres acelera ["Ana", "Luis"]
+transmision(nombres)
+transmision(longitud("pitlane"))
+safety_car:
+    transmision(lista[10])
+accidente e:
+    transmision("Error: " + e)
+bandera_cuadros

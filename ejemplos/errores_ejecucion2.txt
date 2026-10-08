@@ -1,0 +1,4 @@
+// ERROR en la linea 4: indice fuera de rango sin capturar
+parrilla lista acelera [1, 2, 3]
+transmision(lista[2])
+transmision(lista[3])

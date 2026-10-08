@@ -1,0 +1,32 @@
+// Funciones, llamadas anidadas y recursion
+boxes cuadrado(x):
+    meta x * x
+bandera_cuadros
+boxes area(base, altura):
+    meta base * altura / 2
+bandera_cuadros
+boxes sumaCuadrados(a, b):
+    meta cuadrado(a) + cuadrado(b)
+bandera_cuadros
+boxes sinMeta(x):
+    parrilla y acelera x
+bandera_cuadros
+boxes factorial(n):
+    bandera_verde n cede 1:
+        meta 1
+    bandera_cuadros
+    meta n * factorial(n - 1)
+bandera_cuadros
+boxes fibonacci(n):
+    bandera_verde n cede 1:
+        meta n
+    bandera_cuadros
+    meta fibonacci(n - 1) + fibonacci(n - 2)
+bandera_cuadros
+transmision(cuadrado(7))
+transmision(area(7, 4))
+transmision(sumaCuadrados(3, 4))
+transmision(cuadrado(3) + cuadrado(4) * 2)
+transmision(sinMeta(3))
+transmision(factorial(5))
+transmision(fibonacci(10))

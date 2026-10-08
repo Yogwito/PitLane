@@ -1,0 +1,3 @@
+// ERROR en la linea 3: variable no declarada
+parrilla a acelera 1
+transmision(a + b)

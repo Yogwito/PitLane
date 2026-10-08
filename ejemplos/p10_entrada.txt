@@ -1,0 +1,5 @@
+// Entrada: lee dos lineas con radio() y muestra su suma y producto
+parrilla a acelera a_entero(radio())
+parrilla b acelera a_entero(radio())
+transmision("Suma: " + (a + b))
+transmision("Producto: " + (a * b))
