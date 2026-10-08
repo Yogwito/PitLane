@@ -16,9 +16,14 @@ guard let source = try? String(contentsOfFile: path, encoding: .utf8) else {
 
 var lexer = Lexer(source: source)
 do {
-    for token in try lexer.tokenize() where token.type != .newline {
+    let tokens = try lexer.tokenize()
+    for token in tokens where token.type != .newline {
         print("[line \(token.line)] \(token.type.rawValue) \(token.lexeme)")
     }
+    _ = try Parser(tokens: tokens).parseProgram()
+    print("Syntax OK")
 } catch let error as LexicalError {
+    fail(error.description)
+} catch let error as SyntaxError {
     fail(error.description)
 }
