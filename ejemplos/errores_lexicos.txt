@@ -1,0 +1,3 @@
+parrilla x acelera 10
+# esto es un simbolo invalido
+transmision("texto sin cerrar)

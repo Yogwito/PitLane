@@ -1,0 +1,6 @@
+parrilla x acelera 20
+bandera_verde x supera 5:
+    transmision("Mayor que 5")
+bandera_azul:
+    transmision("Menor o igual que 5")
+bandera_cuadros
