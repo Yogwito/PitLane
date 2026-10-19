@@ -1,11 +1,27 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
 
 final class Interpreter {
     private static let maxCallDepth = 1000
+    private static let maxNesting = 128
+    private static let maxSteps = 1_000_000
+    private static let maxOutputBytes = 1_000_000
+    private static let maxValueBytes = 1_000_000
+    private static let maxAllocatedBytes = 64 * 1024 * 1024
+    private static let maxResidentBytes = 256 * 1024 * 1024
 
     private let globals = Environment()
     private var callDepth = 0
     private var loopDepth = 0
+    private var blockDepth = 0
+    private var evalDepth = 0
+    private var steps = 0
+    private var outputBytes = 0
+    private var allocatedBytes = 0
 
     init() {
         installBuiltins()
@@ -18,6 +34,11 @@ final class Interpreter {
     // MARK: - Sentencias
 
     private func execBlock(_ statements: Block, _ env: Environment) throws -> Completion {
+        blockDepth += 1
+        defer { blockDepth -= 1 }
+        if blockDepth > Interpreter.maxNesting {
+            throw RuntimeError(line: statements.first?.line ?? 1, "nesting limit exceeded")
+        }
         try hoistDeclarations(statements, env)
         for statement in statements {
             let completion = try exec(statement, env)
@@ -33,9 +54,11 @@ final class Interpreter {
         for statement in statements {
             switch statement.kind {
             case .function(let decl):
+                try charge(128, line: statement.line)
                 try env.declare(
                     decl.name, .function(Closure(decl: decl, env: env)), line: statement.line)
             case .classDecl(let decl):
+                try charge(128 + decl.methods.count * 128, line: statement.line)
                 var methods: [String: Closure] = [:]
                 for method in decl.methods {
                     methods[method.name] = Closure(decl: method, env: env)
@@ -51,6 +74,7 @@ final class Interpreter {
 
     private func exec(_ stmt: Stmt, _ env: Environment) throws -> Completion {
         let line = stmt.line
+        try tick(line)
         switch stmt.kind {
         case .declaration(let isConstant, let name, let initial):
             var value = Value.none
@@ -75,6 +99,7 @@ final class Interpreter {
             loopDepth += 1
             defer { loopDepth -= 1 }
             while try condition(cond, env) {
+                try tick(line)
                 let completion = try execBlock(body, Environment(parent: env))
                 switch completion {
                 case .breakLoop: return .normal
@@ -95,6 +120,7 @@ final class Interpreter {
             defer { loopDepth -= 1 }
             var i = from
             while true {
+                try tick(line)
                 let scope = Environment(parent: env)
                 try scope.declare(variable, .int(i), line: line)
                 let completion = try execBlock(body, scope)
@@ -123,7 +149,13 @@ final class Interpreter {
             return .returnValue(value)
 
         case .print(let expr):
-            print(display(try eval(expr, env)))
+            let result = try eval(expr, env)
+            guard let value = displayLimited(result, maxBytes: Interpreter.maxOutputBytes - outputBytes - 1) else {
+                throw RuntimeError(line: line, "output limit exceeded")
+            }
+            let bytes = value.utf8.count + 1
+            outputBytes += bytes
+            print(value)
             return .normal
 
         case .function, .classDecl:
@@ -190,6 +222,7 @@ final class Interpreter {
                 throw RuntimeError(
                     line: line, "type error: cannot set attribute '\(name)' on \(object.typeName)")
             }
+            if instance.attributes[name] == nil { try charge(64, line: line) }
             instance.attributes[name] = value
         }
     }
@@ -205,6 +238,12 @@ final class Interpreter {
 
     private func eval(_ expr: Expr, _ env: Environment) throws -> Value {
         let line = expr.line
+        try tick(line)
+        evalDepth += 1
+        defer { evalDepth -= 1 }
+        if evalDepth > Interpreter.maxNesting {
+            throw RuntimeError(line: line, "nesting limit exceeded")
+        }
         switch expr.kind {
         case .int(let v): return .int(v)
         case .real(let v): return .real(v)
@@ -268,6 +307,7 @@ final class Interpreter {
             return value
 
         case .list(let elementExprs):
+            try charge(64 + elementExprs.count * 64, line: line)
             return .list(ListRef(try elementExprs.map { try eval($0, env) }))
 
         case .new(let className, let argExprs):
@@ -275,6 +315,7 @@ final class Interpreter {
                 throw RuntimeError(line: line, "undefined class '\(className)'")
             }
             let args = try argExprs.map { try eval($0, env) }
+            try charge(128, line: line)
             let instance = Instance(cls: cls)
             if let ctor = cls.constructor {
                 _ = try invoke(
@@ -286,8 +327,58 @@ final class Interpreter {
             return .object(instance)
 
         case .readLine:
-            return .string(readLine() ?? "")
+            return try readInput(line: line)
         }
+    }
+
+    private func readInput(line: Int) throws -> Value {
+        var bytes = Data()
+        while true {
+            let next = FileHandle.standardInput.readData(ofLength: 1)
+            if next.isEmpty || next[0] == 10 { break }
+            if bytes.count >= Interpreter.maxValueBytes {
+                throw RuntimeError(line: line, "input line limit exceeded")
+            }
+            bytes.append(next)
+        }
+        if bytes.last == 13 { bytes.removeLast() }
+        guard let value = String(data: bytes, encoding: .utf8) else {
+            throw RuntimeError(line: line, "invalid UTF-8 input")
+        }
+        try charge(value.utf8.count, line: line)
+        return .string(value)
+    }
+
+    private func tick(_ line: Int) throws {
+        steps += 1
+        if steps > Interpreter.maxSteps {
+            throw RuntimeError(line: line, "execution limit exceeded")
+        }
+        if steps % 256 == 0 {
+            var usage = rusage()
+            #if os(Linux)
+            let result = getrusage(RUSAGE_SELF.rawValue, &usage)
+            #else
+            let result = getrusage(RUSAGE_SELF, &usage)
+            #endif
+            if result == 0 {
+                #if os(Linux)
+                let residentBytes = Int(usage.ru_maxrss) * 1024
+                #else
+                let residentBytes = Int(usage.ru_maxrss)
+                #endif
+                if residentBytes > Interpreter.maxResidentBytes {
+                    throw RuntimeError(line: line, "memory limit exceeded")
+                }
+            }
+        }
+    }
+
+    private func charge(_ bytes: Int, line: Int) throws {
+        if bytes > Interpreter.maxAllocatedBytes - allocatedBytes {
+            throw RuntimeError(line: line, "memory limit exceeded")
+        }
+        allocatedBytes += bytes
     }
 
     private func evalLogical(
@@ -333,7 +424,10 @@ final class Interpreter {
                 throw RuntimeError(
                     line: line, "expected \(builtin.arity) arguments but got \(args.count)")
             }
-            return try builtin.body(args, line)
+            if builtin.name == "agregar" { try charge(64, line: line) }
+            let result = try builtin.body(args, line)
+            if case .string(let value) = result { try charge(value.utf8.count, line: line) }
+            return result
         default:
             throw RuntimeError(line: line, "not callable")
         }
@@ -372,18 +466,38 @@ final class Interpreter {
     private func binary(_ op: BinaryOp, _ left: Value, _ right: Value, line: Int) throws -> Value {
         switch op {
         case .add:
-            if case .string = left { return .string(display(left) + display(right)) }
-            if case .string = right { return .string(display(left) + display(right)) }
+            if case .string = left { return try concat(left, right, line: line) }
+            if case .string = right { return try concat(left, right, line: line) }
             return try arithmetic(op, left, right, line: line)
         case .sub, .mul, .div, .mod:
             return try arithmetic(op, left, right, line: line)
         case .gt, .lt, .ge, .le:
             return try compare(op, left, right, line: line)
-        case .eq: return .bool(valuesEqual(left, right))
-        case .ne: return .bool(!valuesEqual(left, right))
+        case .eq, .ne:
+            guard let equal = valuesEqual(left, right) else {
+                throw RuntimeError(line: line, "comparison limit exceeded")
+            }
+            return .bool(op == .eq ? equal : !equal)
         case .and, .or:
             preconditionFailure("aliado/rival se evalúan con cortocircuito en evalLogical")
         }
+    }
+
+    private func concat(_ left: Value, _ right: Value, line: Int) throws -> Value {
+        guard let a = displayLimited(left, maxBytes: Interpreter.maxValueBytes),
+              let b = displayLimited(right, maxBytes: Interpreter.maxValueBytes) else {
+            throw RuntimeError(line: line, "text limit exceeded")
+        }
+        if a.utf8.count > Interpreter.maxValueBytes - b.utf8.count {
+            throw RuntimeError(line: line, "text limit exceeded")
+        }
+        try charge(a.utf8.count + b.utf8.count, line: line)
+        return .string(a + b)
+    }
+
+    private func real(_ result: Double, line: Int) throws -> Value {
+        guard result.isFinite else { throw RuntimeError(line: line, "real out of range") }
+        return .real(result)
     }
 
     private func typeError(_ op: BinaryOp, _ left: Value, _ right: Value, line: Int) -> RuntimeError {
@@ -427,12 +541,12 @@ final class Interpreter {
             throw typeError(op, left, right, line: line)
         }
         switch op {
-        case .add: return .real(a + b)
-        case .sub: return .real(a - b)
-        case .mul: return .real(a * b)
+        case .add: return try real(a + b, line: line)
+        case .sub: return try real(a - b, line: line)
+        case .mul: return try real(a * b, line: line)
         case .div:
             if b == 0 { throw RuntimeError(line: line, "division by zero") }
-            return .real(a / b)
+            return try real(a / b, line: line)
         default: preconditionFailure("operador no aritmético")
         }
     }
@@ -508,7 +622,10 @@ final class Interpreter {
             case .int(let i): return .real(Double(i))
             case .real: return args[0]
             case .string(let s):
-                guard let d = Double(s.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                let text = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                let significand = text.split(whereSeparator: { $0 == "e" || $0 == "E" }).first ?? ""
+                let hasNonzeroDigit = significand.contains(where: { $0 >= "1" && $0 <= "9" })
+                guard let d = Double(text), d.isFinite, d != 0 || !hasNonzeroDigit else {
                     throw RuntimeError(line: line, "invalid real '\(s)'")
                 }
                 return .real(d)
@@ -518,6 +635,11 @@ final class Interpreter {
             }
         }
 
-        define("a_texto", 1) { args, _ in .string(display(args[0])) }
+        define("a_texto", 1) { args, line in
+            guard let text = displayLimited(args[0], maxBytes: Interpreter.maxValueBytes) else {
+                throw RuntimeError(line: line, "text limit exceeded")
+            }
+            return .string(text)
+        }
     }
 }

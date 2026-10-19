@@ -4,7 +4,7 @@ PitLane es un lenguaje de programación pequeño con vocabulario de Fórmula 1. 
 
 ## Requisitos
 
-- Swift 5.9 o superior.
+- Swift 5.9 como versión mínima del paquete y de las pruebas. También se verifica con Swift 6.4 en macOS; las versiones anteriores a 5.9 se rechazan al ejecutar `probar.sh`.
 - macOS o Linux.
 
 ## Compilar y ejecutar
@@ -47,6 +47,8 @@ Un error en cualquier fase detiene el proceso con código de salida 1.
 
 ```sh
 ./probar.sh
+./probar.sh --release
+./probar.sh --watch
 ```
 
 El script compila el proyecto y recorre `ejemplos/`:
@@ -54,7 +56,7 @@ El script compila el proyecto y recorre `ejemplos/`:
 - `X.esperado`: ejecuta `X.txt` con `--solo-salida` (usando `X.in` como entrada si existe) y compara la salida. Los archivos `errores_*` además deben terminar con código de salida 1.
 - `X.completo.esperado`: ejecuta `X.txt` sin `--solo-salida` y compara las tres fases completas.
 
-Al final muestra un resumen `N OK, M FALLA` y devuelve un código distinto de 0 si algo falla.
+Al final muestra un resumen `N OK, M FALLA` y devuelve un código distinto de 0 si algo falla. Las dos primeras invocaciones ejecutan la misma batería sobre los binarios de desarrollo y de publicación, respectivamente. `--watch` ejecuta ambas y las repite al detectar cambios en los archivos del proyecto mientras siga abierto; se detiene con Ctrl+C. Para validar una entrega en macOS y Linux, ejecute ambas configuraciones en cada sistema; cualquier código de salida distinto de cero rechaza el cambio.
 
 ## Estructura del repositorio
 
@@ -155,7 +157,9 @@ factorial de 5 = 120
 
 ## Errores
 
-Todos los errores se imprimen por la salida estándar, indican la línea y terminan el proceso con código de salida 1. Lo que el programa ya había impreso se conserva.
+Los errores léxicos, sintácticos y de ejecución se imprimen por la salida estándar, indican la línea y terminan el proceso con código de salida 1. El límite de tiempo también se informa por la salida estándar, sin línea porque puede vencer durante la lectura del archivo o de `radio()`. Lo que el programa ya había impreso se conserva.
+
+El contrato de la línea de comandos es `PitLane [--solo-salida] <archivo.txt>`. La falta de archivo, una ruta ilegible, un archivo que excede el límite o una combinación inválida de argumentos terminan con código 1 y un mensaje por la salida de errores, sin ejecutar el programa. Al invocarse desde otra carpeta o mediante `PATH`, se aplican los mismos resultados y límites. Si `radio()` encuentra el fin de la entrada estándar, devuelve texto vacío. La salida estándar se emite inmediatamente: si vence el tiempo, se conservan las líneas completas impresas antes del bloqueo y se añade `Runtime error: time limit exceeded`.
 
 ```
 Lexical error on line 2: unrecognized symbol '#'
@@ -167,6 +171,12 @@ Runtime error on line 4: division by zero
 ```
 
 Ejemplos de errores de ejecución: `division by zero`, `index out of range`, `undeclared variable 'x'`, `cannot assign to constant 'x'`, `'x' already declared`, `expected N arguments but got M`, `not callable`, `stack overflow`, `undefined attribute 'x'`, `undefined method 'm'`, `undefined class 'X'`, `condition must be boolean`. Una `penalizacion` que nadie captura se informa como `Runtime error on line N:` seguido del valor lanzado.
+
+Para evitar bloqueos y consumo excesivo de recursos, cada archivo fuente puede ocupar hasta 1 000 000 de bytes. Un proceso supervisor termina al intérprete después de 5 segundos; la ejecución también se detiene después de 1 000 000 de pasos. El análisis y la ejecución admiten hasta 128 niveles de anidamiento y una comparación hasta 1 000 000 de pares de valores. Una línea leída por `radio()`, un texto construido y la salida del programa tienen un límite de 1 000 000 de bytes cada uno. El intérprete limita las asignaciones acumuladas de valores a 64 MiB y comprueba periódicamente si el pico de memoria residente supera 256 MiB. En Linux, el proceso intérprete también tiene un límite de 1 GiB de espacio de direcciones impuesto por el sistema operativo. Al alcanzar un límite se informa un error; las listas cíclicas se muestran con `[<cycle>]`.
+
+`./probar.sh` comprueba los ejemplos, casos adversariales, 160 programas generados con resultados esperados (incluidas combinaciones de funciones, listas, bucles y condiciones), transformaciones que conservan la salida, 200 mutaciones de caracteres y casos de ejecución desde `PATH`, entrada cerrada y tiempo agotado. La generación usa una semilla fija para reproducir los fallos.
+
+La compatibilidad se evalúa contra Swift 5.9. Un cambio de sintaxis, resultados, mensajes de error, límites o códigos de salida exige actualizar esta descripción y los resultados esperados junto con el código. Los archivos de evaluación externos deben ejecutarse con las dos configuraciones; no forman parte de esta batería mientras no se proporcionen.
 
 ## Estado
 

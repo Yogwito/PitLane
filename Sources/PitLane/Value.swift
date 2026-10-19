@@ -71,38 +71,87 @@ enum Value {
 
 /// Reglas de impresión del lenguaje. `quoted` pone comillas a los textos (dentro de listas).
 func display(_ value: Value, quoted: Bool = false) -> String {
+    displayLimited(value, maxBytes: 1_000_000, quoted: quoted) ?? "<value too large>"
+}
+
+func displayLimited(_ value: Value, maxBytes: Int, quoted: Bool = false) -> String? {
+    var active: Set<ObjectIdentifier> = []
+    var remaining = maxBytes
+    var result = ""
+    guard appendDisplay(value, quoted: quoted, active: &active, depth: 0,
+                        remaining: &remaining, result: &result) else { return nil }
+    return result
+}
+
+private func appendDisplay(_ value: Value, quoted: Bool, active: inout Set<ObjectIdentifier>,
+                           depth: Int, remaining: inout Int, result: inout String) -> Bool {
+    func append(_ text: String) -> Bool {
+        let count = text.utf8.count
+        if count > remaining { return false }
+        remaining -= count
+        result.append(text)
+        return true
+    }
     switch value {
-    case .int(let i): return String(i)
-    case .real(let d): return String(d)
-    case .string(let s): return quoted ? "\"\(s)\"" : s
-    case .bool(let b): return b ? "gana" : "pierde"
-    case .list(let l): return "[" + l.items.map { display($0, quoted: true) }.joined(separator: ", ") + "]"
-    case .object(let o): return "<\(o.cls.name)>"
-    case .function(let f): return "<function \(f.decl.name)>"
-    case .builtin(let b): return "<function \(b.name)>"
-    case .classDef(let c): return "<class \(c.name)>"
-    case .none: return "nada"
+    case .int(let i): return append(String(i))
+    case .real(let d): return append(String(d))
+    case .string(let s):
+        if !quoted { return append(s) }
+        return append("\"") && append(s) && append("\"")
+    case .bool(let b): return append(b ? "gana" : "pierde")
+    case .list(let l):
+        let id = ObjectIdentifier(l)
+        if active.contains(id) { return append("[<cycle>]") }
+        if depth >= 128 { return append("[<depth limit>]") }
+        active.insert(id)
+        defer { active.remove(id) }
+        if !append("[") { return false }
+        for (index, item) in l.items.enumerated() {
+            if index > 0 && !append(", ") { return false }
+            if !appendDisplay(item, quoted: true, active: &active, depth: depth + 1,
+                              remaining: &remaining, result: &result) { return false }
+        }
+        return append("]")
+    case .object(let o): return append("<\(o.cls.name)>")
+    case .function(let f): return append("<function \(f.decl.name)>")
+    case .builtin(let b): return append("<function \(b.name)>")
+    case .classDef(let c): return append("<class \(c.name)>")
+    case .none: return append("nada")
     }
 }
 
 /// empata/distinto: entero y real se comparan numéricamente, listas por contenido, objetos por identidad.
-func valuesEqual(_ a: Value, _ b: Value) -> Bool {
-    switch (a, b) {
-    case let (.int(x), .int(y)): return x == y
-    case let (.real(x), .real(y)): return x == y
-    case let (.int(x), .real(y)): return Double(x) == y
-    case let (.real(x), .int(y)): return x == Double(y)
-    case let (.string(x), .string(y)): return x == y
-    case let (.bool(x), .bool(y)): return x == y
-    case let (.list(x), .list(y)):
-        return x === y
-            || (x.items.count == y.items.count
-                && zip(x.items, y.items).allSatisfy { valuesEqual($0, $1) })
-    case let (.object(x), .object(y)): return x === y
-    case let (.function(x), .function(y)): return x === y
-    case let (.classDef(x), .classDef(y)): return x === y
-    case let (.builtin(x), .builtin(y)): return x === y
-    case (.none, .none): return true
-    default: return false
+private struct ListPair: Hashable {
+    let left: ObjectIdentifier
+    let right: ObjectIdentifier
+}
+
+func valuesEqual(_ a: Value, _ b: Value) -> Bool? {
+    var pending: [(Value, Value)] = [(a, b)]
+    var seen: Set<ListPair> = []
+    var comparisons = 0
+    while let (left, right) = pending.popLast() {
+        comparisons += 1
+        if comparisons > 1_000_000 { return nil }
+        switch (left, right) {
+        case let (.int(x), .int(y)): if x != y { return false }
+        case let (.real(x), .real(y)): if x != y { return false }
+        case let (.int(x), .real(y)): if Double(x) != y { return false }
+        case let (.real(x), .int(y)): if x != Double(y) { return false }
+        case let (.string(x), .string(y)): if x != y { return false }
+        case let (.bool(x), .bool(y)): if x != y { return false }
+        case let (.list(x), .list(y)):
+            if x === y { continue }
+            if x.items.count != y.items.count { return false }
+            let pair = ListPair(left: ObjectIdentifier(x), right: ObjectIdentifier(y))
+            if seen.insert(pair).inserted { pending.append(contentsOf: zip(x.items, y.items)) }
+        case let (.object(x), .object(y)): if x !== y { return false }
+        case let (.function(x), .function(y)): if x !== y { return false }
+        case let (.classDef(x), .classDef(y)): if x !== y { return false }
+        case let (.builtin(x), .builtin(y)): if x !== y { return false }
+        case (.none, .none): break
+        default: return false
+        }
     }
+    return true
 }

@@ -7,8 +7,11 @@ struct SyntaxError: Error {
 
 /// Descenso recursivo: una función por regla, según la gramática EBNF de PitLane.
 final class Parser {
+    private static let maxNesting = 128
     private let tokens: [Token]
     private var pos = 0
+    private var nesting = 0
+    private var unaryNesting = 0
 
     init(tokens: [Token]) {
         self.tokens = tokens
@@ -96,6 +99,9 @@ final class Parser {
 
     /// Termina (sin consumir) en un cierre de bloque o en el fin del archivo.
     private func parseBlock() throws -> Block {
+        nesting += 1
+        defer { nesting -= 1 }
+        if nesting > Parser.maxNesting { throw error("nesting limit exceeded") }
         var statements: Block = []
         while true {
             skipNewlines()
@@ -298,7 +304,10 @@ final class Parser {
     // MARK: - Expresiones (de menor a mayor precedencia)
 
     func parseExpr() throws -> Expr {
-        try parseBinary([.kwRival: .or], next: parseAnd)
+        nesting += 1
+        defer { nesting -= 1 }
+        if nesting > Parser.maxNesting { throw error("nesting limit exceeded") }
+        return try parseBinary([.kwRival: .or], next: parseAnd)
     }
 
     private func parseAnd() throws -> Expr {
@@ -337,6 +346,9 @@ final class Parser {
 
     private func parseUnary() throws -> Expr {
         if let t = current, t.type == .kwContra || t.type == .minus {
+            unaryNesting += 1
+            defer { unaryNesting -= 1 }
+            if unaryNesting > Parser.maxNesting { throw error("nesting limit exceeded") }
             advance()
             let operand = try parseUnary()
             return Expr(kind: .unary(t.type == .minus ? .neg : .not, operand), line: t.line)
@@ -390,7 +402,11 @@ final class Parser {
             return Expr(kind: .int(value), line: line)
         case .realNumber:
             advance()
-            return Expr(kind: .real(Double(t.lexeme) ?? 0), line: line)
+            guard let value = Double(t.lexeme), value.isFinite,
+                  value != 0 || !t.lexeme.contains(where: { $0 >= "1" && $0 <= "9" }) else {
+                throw SyntaxError(line: line, message: "real out of range '\(t.lexeme)'")
+            }
+            return Expr(kind: .real(value), line: line)
         case .string:
             advance()
             return Expr(kind: .string(t.lexeme), line: line)

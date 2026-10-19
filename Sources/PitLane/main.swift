@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
 
 /// Errores de uso de la línea de comandos: van por stderr.
 func failUsage(_ message: String) -> Never {
@@ -21,9 +26,58 @@ guard arguments.count == 1 else {
     failUsage("Usage: PitLane [--solo-salida] <archivo.txt>")
 }
 
+if ProcessInfo.processInfo.environment["PITLANE_WORKER"] != "1" {
+    let child = Process()
+    child.executableURL = Bundle.main.executableURL
+    child.arguments = Array(CommandLine.arguments.dropFirst())
+    var environment = ProcessInfo.processInfo.environment
+    environment["PITLANE_WORKER"] = "1"
+    child.environment = environment
+    child.standardInput = FileHandle.standardInput
+    child.standardOutput = FileHandle.standardOutput
+    child.standardError = FileHandle.standardError
+    do {
+        try child.run()
+    } catch {
+        failUsage("Error: cannot start interpreter")
+    }
+    let deadline = Date().addingTimeInterval(5)
+    while child.isRunning && Date() < deadline {
+        Thread.sleep(forTimeInterval: 0.01)
+    }
+    if child.isRunning {
+        kill(child.processIdentifier, SIGKILL)
+        child.waitUntilExit()
+        fail("Runtime error: time limit exceeded")
+    }
+    child.waitUntilExit()
+    if child.terminationReason != .exit {
+        fail("Runtime error: process terminated unexpectedly")
+    }
+    exit(child.terminationStatus)
+}
+
+setbuf(stdout, nil)
+
+#if canImport(Glibc)
+let addressSpaceResource = __rlimit_resource_t(RLIMIT_AS.rawValue)
+var addressSpaceLimit = rlimit(rlim_cur: 1_073_741_824, rlim_max: 1_073_741_824)
+if setrlimit(addressSpaceResource, &addressSpaceLimit) != 0 {
+    failUsage("Error: cannot set memory limit")
+}
+#endif
+
 let path = arguments[0]
+let maxSourceBytes = 1_000_000
+if let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+   let size = attributes[.size] as? NSNumber, size.intValue > maxSourceBytes {
+    failUsage("Error: source file exceeds \(maxSourceBytes) bytes")
+}
 guard let source = try? String(contentsOfFile: path, encoding: .utf8) else {
     failUsage("Error: cannot read file '\(path)'")
+}
+if source.utf8.count > maxSourceBytes {
+    failUsage("Error: source file exceeds \(maxSourceBytes) bytes")
 }
 
 func header(_ title: String, first: Bool = false) {
@@ -86,13 +140,4 @@ func runPipeline() {
     }
 }
 
-// La recursión profunda necesita más pila que el hilo principal.
-let finished = DispatchSemaphore(value: 0)
-let worker = Thread {
-    runPipeline()
-    finished.signal()
-}
-worker.stackSize = 512 * 1024 * 1024
-worker.start()
-finished.wait()
-exit(0)
+runPipeline()

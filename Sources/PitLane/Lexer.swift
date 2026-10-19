@@ -11,8 +11,8 @@ struct Lexer {
     private var line = 1
 
     init(source: String) {
-        // "\r\n" es un solo Character en Swift; se normaliza a "\n".
-        chars = Array(source.replacingOccurrences(of: "\r\n", with: "\n"))
+        chars = Array(source.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n"))
     }
 
     private func peek(_ offset: Int = 0) -> Character? {
