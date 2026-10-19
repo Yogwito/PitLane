@@ -140,4 +140,13 @@ func runPipeline() {
     }
 }
 
-runPipeline()
+// Pila amplia para que la recursión llegue a "stack overflow" (1000 llamadas) sin que
+// se desborde la pila nativa; el control de memoria residente corta antes de agotarla.
+let pipelineDone = DispatchSemaphore(value: 0)
+let pipelineThread = Thread {
+    runPipeline()
+    pipelineDone.signal()
+}
+pipelineThread.stackSize = 512 * 1024 * 1024
+pipelineThread.start()
+pipelineDone.wait()

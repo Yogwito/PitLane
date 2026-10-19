@@ -8,7 +8,9 @@ import Glibc
 final class Interpreter {
     private static let maxCallDepth = 1000
     private static let maxNesting = 128
-    private static let maxSteps = 1_000_000
+    private static let maxSteps = 100_000_000
+    /// Antes de que el supervisor corte a los 5 s, para informar la línea del bucle.
+    private static let maxSeconds = 4.0
     private static let maxOutputBytes = 1_000_000
     private static let maxValueBytes = 1_000_000
     private static let maxAllocatedBytes = 64 * 1024 * 1024
@@ -22,6 +24,7 @@ final class Interpreter {
     private var steps = 0
     private var outputBytes = 0
     private var allocatedBytes = 0
+    private let startTime = ProcessInfo.processInfo.systemUptime
 
     init() {
         installBuiltins()
@@ -355,6 +358,9 @@ final class Interpreter {
             throw RuntimeError(line: line, "execution limit exceeded")
         }
         if steps % 256 == 0 {
+            if ProcessInfo.processInfo.systemUptime - startTime > Interpreter.maxSeconds {
+                throw RuntimeError(line: line, "execution limit exceeded")
+            }
             var usage = rusage()
             #if os(Linux)
             let result = getrusage(RUSAGE_SELF.rawValue, &usage)
@@ -440,12 +446,19 @@ final class Interpreter {
         guard args.count == params.count else {
             throw RuntimeError(line: line, "expected \(params.count) arguments but got \(args.count)")
         }
+        // El límite de anidamiento es por función; la recursión la limita maxCallDepth.
         callDepth += 1
         let savedLoopDepth = loopDepth
+        let savedBlockDepth = blockDepth
+        let savedEvalDepth = evalDepth
         loopDepth = 0
+        blockDepth = 0
+        evalDepth = 0
         defer {
             callDepth -= 1
             loopDepth = savedLoopDepth
+            blockDepth = savedBlockDepth
+            evalDepth = savedEvalDepth
         }
         guard callDepth <= Interpreter.maxCallDepth else {
             throw RuntimeError(line: line, "stack overflow")
