@@ -35,11 +35,17 @@ if [ -z "$mayor" ] || (( mayor < 5 || (mayor == 5 && menor < 9) )); then
     exit 1
 fi
 swift build --disable-sandbox -c "$configuracion" -q || exit 1
-BIN=".build/$configuracion/PitLane"
+# En Windows .build/debug no siempre existe (no se pudo crear el enlace): se pregunta la ruta real.
+BIN="$(swift build --disable-sandbox -c "$configuracion" --show-bin-path)/PitLane"
 ok=0
 falla=0
 temporal=$(mktemp -d "${TMPDIR:-/tmp}/pitlane-tests.XXXXXX") || exit 1
 trap 'rm -rf "$temporal"' EXIT
+
+# En Windows (Git Bash) el intérprete recibe y muestra las rutas como C:/...
+ruta_nativa() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
+}
 
 comparar() {  # nombre esperado codigo_esperado codigo_real
     local nombre="$1" esperado="$2" cod_esp="$3" cod_real="$4" d
@@ -94,7 +100,16 @@ adversarial igualdad_ciclica $'parrilla x acelera []\nagregar(x, x)\nparrilla y 
 adversarial real_fuera_de_rango $'transmision(a_real("1e400"))\n' "Runtime error on line 1: invalid real '1e400'" 1
 adversarial real_subdesbordado $'transmision(a_real("1e-400"))\n' "Runtime error on line 1: invalid real '1e-400'" 1
 adversarial bucle_sin_fin $'vuelta gana:\nbandera_cuadros\n' 'Runtime error on line 1: execution limit exceeded' 1
+adversarial parentesis_sin_cerrar $'transmision(1 + 2\nparrilla y acelera 3\n' "Syntax error on line 2: expected ')'" 1
+adversarial romper_fuera_de_bucle $'transmision("a")\nbandera_verde gana:\nbandera_roja\nbandera_cuadros\n' "Syntax error on line 3: 'bandera_roja' outside loop" 1
+adversarial continuar_fuera_de_bucle $'pit_stop\n' "Syntax error on line 1: 'pit_stop' outside loop" 1
+adversarial meta_fuera_de_funcion $'transmision("a")\nmeta 5\n' "Syntax error on line 2: 'meta' outside function" 1
+adversarial romper_en_funcion_dentro_de_bucle $'vuelta gana:\nboxes f():\nbandera_roja\nbandera_cuadros\nbandera_cuadros\n' "Syntax error on line 3: 'bandera_roja' outside loop" 1
+adversarial parametro_repetido $'boxes f(a, b, a):\nmeta a\nbandera_cuadros\n' "Syntax error on line 1: duplicate parameter 'a'" 1
+adversarial metodo_repetido $'escuderia C:\nboxes m():\nmeta 1\nbandera_cuadros\nboxes m(a):\nmeta 2\nbandera_cuadros\nbandera_cuadros\n' "Syntax error on line 5: duplicate method 'm'" 1
 adversarial fin_de_linea_cr $'parrilla x acelera 1\rtransmision(x)\r' '1' 0
+adversarial fuente_con_bom $'\xEF\xBB\xBFparrilla a\xC3\xB1o acelera "canci\xC3\xB3n"\ntransmision(a\xC3\xB1o)\n' 'canción' 0
+adversarial fuente_windows_1252 $'parrilla a\xF1o acelera "canci\xF3n \x80"\ntransmision(a\xF1o)\n' 'canción €' 0
 apertura=''
 cierre=''
 for ((i=0; i<140; i++)); do apertura+='('; cierre+=')'; done
@@ -115,33 +130,30 @@ for longitud in 1000 1001; do
 done
 adversarial comparacion_ciclica "${comparacion}transmision(xs[0] empata ys[0])" 'Runtime error on line 15: comparison limit exceeded' 1
 printf -v bloque '%10000s' ''
+# Retiene unos 400 MB de textos distintos: supera los 256 MiB de memoria residente.
+# El cuerpo va en la línea del circuito para que el error tenga siempre la misma línea.
 adversarial memoria "parrilla xs acelera []
 parrilla bloque acelera \"${bloque}\"
-circuito i salida 1 llegada 9000:
-agregar(xs, bloque + a_texto(i))
+circuito i salida 1 llegada 40000: agregar(xs, bloque + a_texto(i))
 bandera_cuadros
-transmision(longitud(xs))" 'Runtime error on line 4: memory limit exceeded' 1
+transmision(longitud(xs))" 'Runtime error on line 3: memory limit exceeded' 1
+# Lo que se libera no cuenta: armar un texto o crear listas temporales en un bucle no agota la memoria.
+adversarial texto_en_bucle $'parrilla s acelera ""\ncircuito i salida 1 llegada 300000:\ns acelera s + "x"\nbandera_cuadros\ntransmision(longitud(s))\n' '300000' 0
+adversarial texto_en_bucle_compuesto $'parrilla s acelera ""\ncircuito i salida 1 llegada 50000:\ns acelera s + i + ","\nbandera_cuadros\ntransmision(longitud(s))\n' '288894' 0
+adversarial listas_temporales $'parrilla xs acelera []\ncircuito i salida 1 llegada 300000:\nxs acelera [i, i, i]\nbandera_cuadros\ntransmision(xs)\n' '[300000, 300000, 300000]' 0
+adversarial texto_maximo $'parrilla s acelera ""\ncircuito i salida 1 llegada 100001:\ns acelera s + "xxxxxxxxxx"\nbandera_cuadros\n' 'Runtime error on line 3: text limit exceeded' 1
 
-mkfifo "$temporal/entrada.fifo" || exit 1
-sleep 10 >"$temporal/entrada.fifo" &
-escritor=$!
-printf '%s\n' 'parrilla x acelera radio()' >"$temporal/programa.txt"
-printf '%s\n' 'Runtime error: time limit exceeded' >"$temporal/esperado"
-"$BIN" --solo-salida "$temporal/programa.txt" >"$temporal/stdout" 2>"$temporal/stderr" <"$temporal/entrada.fifo"
-codigo=$?
-kill "$escritor" 2>/dev/null
-wait "$escritor" 2>/dev/null
-comparar espera_radio "$temporal/esperado" 1 "$codigo"
+# El límite de tiempo es de CPU: esperar el teclado más de 5 s no cuenta, y un bucle
+# infinito posterior se sigue cortando con su línea.
+printf '%s\n' 'parrilla x acelera radio()' 'transmision("leido: " + x)' >"$temporal/programa.txt"
+printf '%s\n' 'leido: hola' >"$temporal/esperado"
+{ sleep 6; printf 'hola\n'; } | "$BIN" --solo-salida "$temporal/programa.txt" >"$temporal/stdout" 2>"$temporal/stderr"
+comparar espera_radio "$temporal/esperado" 0 "$?"
 
-sleep 10 >"$temporal/entrada.fifo" &
-escritor=$!
-printf '%s\n' 'transmision("antes")' 'radio()' >"$temporal/programa.txt"
-printf '%s\n' 'antes' 'Runtime error: time limit exceeded' >"$temporal/esperado"
-"$BIN" --solo-salida "$temporal/programa.txt" >"$temporal/stdout" 2>"$temporal/stderr" <"$temporal/entrada.fifo"
-codigo=$?
-kill "$escritor" 2>/dev/null
-wait "$escritor" 2>/dev/null
-comparar salida_antes_de_limite "$temporal/esperado" 1 "$codigo"
+printf '%s\n' 'parrilla x acelera radio()' 'transmision("antes")' 'vuelta gana:' 'bandera_cuadros' >"$temporal/programa.txt"
+printf '%s\n' 'antes' 'Runtime error on line 3: execution limit exceeded' >"$temporal/esperado"
+{ sleep 6; printf 'hola\n'; } | "$BIN" --solo-salida "$temporal/programa.txt" >"$temporal/stdout" 2>"$temporal/stderr"
+comparar bucle_tras_radio "$temporal/esperado" 1 "$?"
 
 # El ejecutable debe relanzarse aunque se invoque desde otra carpeta por PATH.
 printf '%s\n' 'Mayor que 5' >"$temporal/esperado"
@@ -150,7 +162,7 @@ repo_dir=$(pwd)
 (cd "$temporal" && PATH="$bin_dir:$PATH" PitLane --solo-salida "$repo_dir/ejemplos/programa1.txt") >"$temporal/stdout" 2>"$temporal/stderr" </dev/null
 comparar ejecutable_en_path "$temporal/esperado" 0 "$?"
 
-printf '%s\n' "Error: cannot read file '$temporal/inexistente.txt'" >"$temporal/esperado"
+printf '%s\n' "Error: cannot read file '$(ruta_nativa "$temporal")/inexistente.txt'" >"$temporal/esperado"
 "$BIN" --solo-salida "$temporal/inexistente.txt" >"$temporal/stdout" 2>"$temporal/stderr" </dev/null
 if [ "$?" -eq 1 ] && [ ! -s "$temporal/stdout" ] && diff -q "$temporal/stderr" "$temporal/esperado" >/dev/null; then
     ok=$((ok + 1))
@@ -172,8 +184,9 @@ error_de_uso() {  # nombre mensaje argumentos...
     fi
 }
 error_de_uso argumentos_invalidos 'Usage: PitLane [--solo-salida] <archivo.txt>'
-printf '\377' >"$temporal/invalido.txt"
-error_de_uso fuente_no_utf8 "Error: cannot read file '$temporal/invalido.txt'" "$temporal/invalido.txt"
+# 0x81 no es UTF-8 válido ni está asignado en Windows-1252.
+printf '\201' >"$temporal/invalido.txt"
+error_de_uso fuente_ilegible "Error: cannot read file '$(ruta_nativa "$temporal")/invalido.txt'" "$temporal/invalido.txt"
 printf -v relleno '%1000001s' ''
 printf '%s' "$relleno" >"$temporal/excesivo.txt"
 unset relleno

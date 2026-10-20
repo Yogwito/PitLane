@@ -1,9 +1,4 @@
 import Foundation
-#if canImport(Darwin)
-import Darwin
-#else
-import Glibc
-#endif
 
 /// Errores de uso de la línea de comandos: van por stderr.
 func failUsage(_ message: String) -> Never {
@@ -18,6 +13,8 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
+Platform.configureStdout()
+
 var arguments = Array(CommandLine.arguments.dropFirst())
 let soloSalida = arguments.contains("--solo-salida")
 arguments.removeAll { $0 == "--solo-salida" }
@@ -25,6 +22,10 @@ arguments.removeAll { $0 == "--solo-salida" }
 guard arguments.count == 1 else {
     failUsage("Usage: PitLane [--solo-salida] <archivo.txt>")
 }
+
+/// Tope de tiempo de CPU del intérprete. El propio intérprete se detiene antes (a los 4 s,
+/// con la línea); este tope solo actúa si algo no llegara a revisarlo.
+let maxCPUSeconds = 5
 
 if ProcessInfo.processInfo.environment["PITLANE_WORKER"] != "1" {
     let child = Process()
@@ -41,31 +42,21 @@ if ProcessInfo.processInfo.environment["PITLANE_WORKER"] != "1" {
     } catch {
         failUsage("Error: cannot start interpreter")
     }
-    let deadline = Date().addingTimeInterval(5)
-    while child.isRunning && Date() < deadline {
-        Thread.sleep(forTimeInterval: 0.01)
-    }
-    if child.isRunning {
-        kill(child.processIdentifier, SIGKILL)
-        child.waitUntilExit()
+    if Platform.waitForExit(child, cpuLimit: maxCPUSeconds) {
         fail("Runtime error: time limit exceeded")
     }
-    child.waitUntilExit()
     if child.terminationReason != .exit {
         fail("Runtime error: process terminated unexpectedly")
     }
     exit(child.terminationStatus)
 }
 
-setbuf(stdout, nil)
-
-#if canImport(Glibc)
-let addressSpaceResource = __rlimit_resource_t(RLIMIT_AS.rawValue)
-var addressSpaceLimit = rlimit(rlim_cur: 1_073_741_824, rlim_max: 1_073_741_824)
-if setrlimit(addressSpaceResource, &addressSpaceLimit) != 0 {
+if !Platform.limitAddressSpace(bytes: 1_073_741_824) {
     failUsage("Error: cannot set memory limit")
 }
-#endif
+if !Platform.limitCPUTime(seconds: maxCPUSeconds) {
+    failUsage("Error: cannot set time limit")
+}
 
 let path = arguments[0]
 let maxSourceBytes = 1_000_000
@@ -73,10 +64,11 @@ if let attributes = try? FileManager.default.attributesOfItem(atPath: path),
    let size = attributes[.size] as? NSNumber, size.intValue > maxSourceBytes {
     failUsage("Error: source file exceeds \(maxSourceBytes) bytes")
 }
-guard let source = try? String(contentsOfFile: path, encoding: .utf8) else {
+guard let data = FileManager.default.contents(atPath: path),
+      let source = decodeSource(data) else {
     failUsage("Error: cannot read file '\(path)'")
 }
-if source.utf8.count > maxSourceBytes {
+if data.count > maxSourceBytes {
     failUsage("Error: source file exceeds \(maxSourceBytes) bytes")
 }
 

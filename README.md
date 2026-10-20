@@ -5,7 +5,7 @@ PitLane es un lenguaje de programación pequeño con vocabulario de Fórmula 1. 
 ## Requisitos
 
 - Swift 5.9 como versión mínima del paquete y de las pruebas. También se verifica con Swift 6.4 en macOS; las versiones anteriores a 5.9 se rechazan al ejecutar `probar.sh`.
-- macOS o Linux.
+- macOS, Linux o Windows. En Windows, `probar.sh` se ejecuta desde Git Bash; si `swift build` no puede crear el enlace `.build/debug`, el ejecutable queda en la ruta que indica `swift build --show-bin-path`.
 
 ## Compilar y ejecutar
 
@@ -56,7 +56,7 @@ El script compila el proyecto y recorre `ejemplos/`:
 - `X.esperado`: ejecuta `X.txt` con `--solo-salida` (usando `X.in` como entrada si existe) y compara la salida. Los archivos `errores_*` además deben terminar con código de salida 1.
 - `X.completo.esperado`: ejecuta `X.txt` sin `--solo-salida` y compara las tres fases completas.
 
-Al final muestra un resumen `N OK, M FALLA` y devuelve un código distinto de 0 si algo falla. Las dos primeras invocaciones ejecutan la misma batería sobre los binarios de desarrollo y de publicación, respectivamente. `--watch` ejecuta ambas y las repite al detectar cambios en los archivos del proyecto mientras siga abierto; se detiene con Ctrl+C. Para validar una entrega en macOS y Linux, ejecute ambas configuraciones en cada sistema; cualquier código de salida distinto de cero rechaza el cambio.
+Al final muestra un resumen `N OK, M FALLA` y devuelve un código distinto de 0 si algo falla. Las dos primeras invocaciones ejecutan la misma batería sobre los binarios de desarrollo y de publicación, respectivamente. `--watch` ejecuta ambas y las repite al detectar cambios en los archivos del proyecto mientras siga abierto; se detiene con Ctrl+C. Para validar una entrega en macOS, Linux y Windows, ejecute ambas configuraciones en cada sistema; cualquier código de salida distinto de cero rechaza el cambio.
 
 ## Estructura del repositorio
 
@@ -72,12 +72,15 @@ Sources/PitLane/
   Environment.swift       ámbitos y variables
   RuntimeError.swift      errores de ejecución y señales de control
   Interpreter.swift       ejecución del árbol
+  SourceDecoding.swift    lectura del archivo fuente (UTF-8 con o sin BOM, Windows-1252)
+  Platform.swift          lo que depende del sistema operativo (memoria, tiempo de CPU)
   main.swift              línea de comandos y fases
 ejemplos/
   programa1..3.txt        programas de ejemplo
-  p04..p14_*.txt          una prueba por requisito (tipos, bucles, listas,
+  p04..p15_*.txt          una prueba por requisito (tipos, bucles, listas,
                           funciones, clases, excepciones, entrada, uso antes
-                          de la definición, escapes, Unicode, tokens)
+                          de la definición, escapes, Unicode, tokens,
+                          estructuras en varias líneas)
   errores_lexicos*.txt    errores léxicos
   errores_sintaxis*.txt   errores de sintaxis
   errores_ejecucion*.txt  errores de ejecución
@@ -108,6 +111,17 @@ ejemplos/
 | `bandera_cuadros` | fin de bloque | `distinto` | `!=` |
 
 Los símbolos `+ - * / % ( ) [ ] , : .` no cambian. Los comentarios empiezan con `//` y llegan hasta el fin de línea. Los bloques se cierran siempre con `bandera_cuadros`.
+
+Cada sentencia termina en el fin de línea, salvo dentro de `( )` o `[ ]`: ahí los saltos de línea se ignoran, así que una lista, una llamada o los parámetros de una función se pueden repartir en varias líneas:
+
+```
+parrilla equipos acelera [
+    "Ferrari",
+    "McLaren"
+]
+```
+
+Los archivos fuente pueden estar en UTF-8 (con o sin BOM) o en Windows-1252 ("ANSI" en los editores de Windows).
 
 Reservadas para uso futuro: `filial`, `estrategia`, `neumatico`, `comodin`, `reagrupar`.
 
@@ -157,9 +171,9 @@ factorial de 5 = 120
 
 ## Errores
 
-Los errores léxicos, sintácticos y de ejecución se imprimen por la salida estándar, indican la línea y terminan el proceso con código de salida 1. El límite de tiempo también se informa por la salida estándar, sin línea porque puede vencer durante la lectura del archivo o de `radio()`. Lo que el programa ya había impreso se conserva.
+Los errores léxicos, sintácticos y de ejecución se imprimen por la salida estándar, indican la línea y terminan el proceso con código de salida 1. Lo que el programa ya había impreso se conserva.
 
-El contrato de la línea de comandos es `PitLane [--solo-salida] <archivo.txt>`. La falta de archivo, una ruta ilegible, un archivo que excede el límite o una combinación inválida de argumentos terminan con código 1 y un mensaje por la salida de errores, sin ejecutar el programa. Al invocarse desde otra carpeta o mediante `PATH`, se aplican los mismos resultados y límites. Si `radio()` encuentra el fin de la entrada estándar, devuelve texto vacío. La salida estándar se emite inmediatamente: si vence el tiempo, se conservan las líneas completas impresas antes del bloqueo y se añade `Runtime error: time limit exceeded`.
+El contrato de la línea de comandos es `PitLane [--solo-salida] <archivo.txt>`. La falta de archivo, una ruta ilegible, un archivo que excede el límite o una combinación inválida de argumentos terminan con código 1 y un mensaje por la salida de errores, sin ejecutar el programa. Al invocarse desde otra carpeta o mediante `PATH`, se aplican los mismos resultados y límites. Si `radio()` encuentra el fin de la entrada estándar, devuelve texto vacío. La salida estándar se emite inmediatamente: si se alcanza un límite, se conservan las líneas completas impresas antes.
 
 ```
 Lexical error on line 2: unrecognized symbol '#'
@@ -167,14 +181,20 @@ Lexical error on line 3: unterminated string
 Lexical error on line 2: invalid escape sequence '\q'
 Syntax error on line 4: expected 'bandera_cuadros'
 Syntax error on line 3: expected expression
+Syntax error on line 5: 'bandera_roja' outside loop
+Syntax error on line 2: duplicate parameter 'a'
 Runtime error on line 4: division by zero
 ```
 
+El análisis sintáctico también rechaza, antes de ejecutar nada, `bandera_roja` o `pit_stop` fuera de un bucle (`'bandera_roja' outside loop`), `meta` fuera de una función o de `ensamble` (`'meta' outside function`), parámetros repetidos (`duplicate parameter 'a'`), métodos repetidos en una `escuderia` (`duplicate method 'm'`) y un segundo `ensamble`. Un bucle exterior no habilita `bandera_roja` dentro de una función definida en él.
+
 Ejemplos de errores de ejecución: `division by zero`, `index out of range`, `undeclared variable 'x'`, `cannot assign to constant 'x'`, `'x' already declared`, `expected N arguments but got M`, `not callable`, `stack overflow`, `undefined attribute 'x'`, `undefined method 'm'`, `undefined class 'X'`, `condition must be boolean`. Una `penalizacion` que nadie captura se informa como `Runtime error on line N:` seguido del valor lanzado.
 
-Para evitar bloqueos y consumo excesivo de recursos, cada archivo fuente puede ocupar hasta 1 000 000 de bytes. Un proceso supervisor termina al intérprete después de 5 segundos; la ejecución también se detiene con `execution limit exceeded` después de 100 000 000 de pasos o de 4 segundos ejecutando. El análisis y la ejecución admiten hasta 128 niveles de anidamiento (en la ejecución, dentro de cada función), la recursión hasta 1000 llamadas anidadas (`stack overflow`) y una comparación hasta 1 000 000 de pares de valores. Una línea leída por `radio()`, un texto construido y la salida del programa tienen un límite de 1 000 000 de bytes cada uno. El intérprete limita las asignaciones acumuladas de valores a 64 MiB y comprueba periódicamente si el pico de memoria residente supera 256 MiB. En Linux, el proceso intérprete también tiene un límite de 1 GiB de espacio de direcciones impuesto por el sistema operativo. Al alcanzar un límite se informa un error; las listas cíclicas se muestran con `[<cycle>]`.
+Para evitar bloqueos y consumo excesivo de recursos, cada archivo fuente puede ocupar hasta 1 000 000 de bytes. El tiempo se mide como tiempo de CPU del intérprete, así que la espera de `radio()` no cuenta: el usuario puede tardar lo que quiera en responder. La ejecución se detiene con `Runtime error on line N: execution limit exceeded` después de 100 000 000 de pasos o de 4 segundos de CPU, indicando la línea en curso. Como respaldo, si algo no llegara a revisar ese límite, el proceso se termina a los 5 segundos de CPU con `Runtime error: time limit exceeded` (en macOS y Linux lo aplica el sistema operativo con `RLIMIT_CPU`; en Windows, el proceso supervisor). El análisis y la ejecución admiten hasta 128 niveles de anidamiento (en la ejecución, dentro de cada función), la recursión hasta 1000 llamadas anidadas (`stack overflow`) y una comparación hasta 1 000 000 de pares de valores. Una línea leída por `radio()`, un texto construido y la salida del programa tienen un límite de 1 000 000 de bytes cada uno. La memoria se limita a 256 MiB de pico de memoria residente (`memory limit exceeded`), medida cada 256 pasos y también en cuanto se asignan 16 MiB desde la última medición; lo que el programa ya liberó no cuenta, así que armar un texto o crear listas temporales en un bucle no agota la memoria. En Linux, el proceso intérprete también tiene un límite de 1 GiB de espacio de direcciones impuesto por el sistema operativo. Al alcanzar un límite se informa un error; las listas cíclicas se muestran con `[<cycle>]`.
 
-`./probar.sh` comprueba los ejemplos, casos adversariales, 160 programas generados con resultados esperados (incluidas combinaciones de funciones, listas, bucles y condiciones), transformaciones que conservan la salida, 200 mutaciones de caracteres y casos de ejecución desde `PATH`, entrada cerrada y tiempo agotado. La generación usa una semilla fija para reproducir los fallos.
+En Windows, la salida usa saltos de línea LF igual que en macOS y Linux, y `.gitattributes` mantiene en LF los scripts y los ejemplos para que las comparaciones sean byte a byte.
+
+`./probar.sh` comprueba los ejemplos, casos adversariales, 160 programas generados con resultados esperados (incluidas combinaciones de funciones, listas, bucles y condiciones), transformaciones que conservan la salida, 200 mutaciones de caracteres y casos de ejecución desde `PATH`, entrada cerrada y espera de `radio()` de más de 5 segundos. La generación usa una semilla fija para reproducir los fallos.
 
 La compatibilidad se evalúa contra Swift 5.9. Un cambio de sintaxis, resultados, mensajes de error, límites o códigos de salida exige actualizar esta descripción y los resultados esperados junto con el código. Los archivos de evaluación externos deben ejecutarse con las dos configuraciones; no forman parte de esta batería mientras no se proporcionen.
 

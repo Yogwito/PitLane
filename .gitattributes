@@ -1,0 +1,3 @@
+# Los scripts y los resultados esperados se comparan byte a byte: siempre LF.
+*.sh text eol=lf
+ejemplos/** text eol=lf

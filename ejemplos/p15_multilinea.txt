@@ -1,0 +1,22 @@
+// Dentro de (...) y [...] los saltos de línea no terminan la sentencia.
+boxes sumar(a,
+            b,
+            c):
+    meta a + b + c
+bandera_cuadros
+parrilla xs acelera [
+    1,
+    2,
+    [3,
+     4]
+]
+transmision(xs)
+transmision(sumar(
+    10,
+    20,
+    30
+))
+transmision((1 +
+    2) * 3)
+parrilla y acelera 5
+transmision(y)

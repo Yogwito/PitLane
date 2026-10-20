@@ -1,20 +1,18 @@
 import Foundation
-#if canImport(Darwin)
-import Darwin
-#else
-import Glibc
-#endif
 
 final class Interpreter {
     private static let maxCallDepth = 1000
     private static let maxNesting = 128
     private static let maxSteps = 100_000_000
-    /// Antes de que el supervisor corte a los 5 s, para informar la línea del bucle.
-    private static let maxSeconds = 4.0
+    /// Segundos de CPU: no cuentan la espera de `radio()`. Va antes del tope de 5 s de
+    /// main.swift para poder informar la línea del bucle.
+    private static let maxCPUSeconds = 4.0
     private static let maxOutputBytes = 1_000_000
     private static let maxValueBytes = 1_000_000
-    private static let maxAllocatedBytes = 64 * 1024 * 1024
+    /// El límite de memoria es el pico de memoria residente; se mide cada 256 pasos y
+    /// también en cuanto se asignan `measureEveryBytes` desde la última medición.
     private static let maxResidentBytes = 256 * 1024 * 1024
+    private static let measureEveryBytes = 16 * 1024 * 1024
 
     private let globals = Environment()
     private var callDepth = 0
@@ -23,8 +21,7 @@ final class Interpreter {
     private var evalDepth = 0
     private var steps = 0
     private var outputBytes = 0
-    private var allocatedBytes = 0
-    private let startTime = ProcessInfo.processInfo.systemUptime
+    private var allocatedSinceMeasure = 0
 
     init() {
         installBuiltins()
@@ -208,6 +205,11 @@ final class Interpreter {
     private func assign(_ target: Target, _ valueExpr: Expr, _ env: Environment, line: Int) throws {
         switch target {
         case .variable(let name):
+            if let operands = appendedOperands(valueExpr, to: name),
+               case .string(var text)? = env.lookup(name) {
+                try appendInPlace(name, &text, operands, env, line: line)
+                return
+            }
             let value = try eval(valueExpr, env)
             try env.assign(name, value, line: line)
         case .index(let baseExpr, let indexExpr):
@@ -228,6 +230,45 @@ final class Interpreter {
             if instance.attributes[name] == nil { try charge(64, line: line) }
             instance.attributes[name] = value
         }
+    }
+
+    /// Si `expr` es `name + e1 + e2 + ...` (asociativo a la izquierda), devuelve cada `e`
+    /// con la línea de su `+`, en orden de evaluación.
+    private func appendedOperands(_ expr: Expr, to name: String) -> [(expr: Expr, line: Int)]? {
+        var operands: [(expr: Expr, line: Int)] = []
+        var node = expr
+        while case .binary(.add, let left, let right) = node.kind {
+            operands.append((right, node.line))
+            if case .variable(name) = left.kind { return operands.reversed() }
+            node = left
+        }
+        return nil
+    }
+
+    /// `x acelera x + e1 + e2 ...` con x texto: mismo resultado y mismos errores que evaluar la
+    /// suma, pero x crece en su lugar en vez de copiarse en cada vuelta de un bucle.
+    /// `text` es el valor de x antes de evaluar los operandos.
+    private func appendInPlace(
+        _ name: String, _ text: inout String, _ operands: [(expr: Expr, line: Int)],
+        _ env: Environment, line: Int
+    ) throws {
+        var parts: [String] = []
+        var length = text.utf8.count
+        for (expr, plusLine) in operands {
+            try tick(plusLine)
+            let part = try concatOperand(try eval(expr, env), line: plusLine)
+            if length > Interpreter.maxValueBytes - part.utf8.count {
+                throw RuntimeError(line: plusLine, "text limit exceeded")
+            }
+            length += part.utf8.count
+            try charge(part.utf8.count, line: plusLine)
+            parts.append(part)
+        }
+        // Se suelta la referencia del ámbito para que `text` sea el único dueño y crezca en
+        // su lugar. Una constante falla aquí, antes de cambiar nada.
+        try env.assign(name, .none, line: line)
+        for part in parts { text.append(part) }
+        try env.assign(name, .string(text), line: line)
     }
 
     private func listIndex(_ list: ListRef, _ index: Value, line: Int) throws -> Int {
@@ -358,33 +399,26 @@ final class Interpreter {
             throw RuntimeError(line: line, "execution limit exceeded")
         }
         if steps % 256 == 0 {
-            if ProcessInfo.processInfo.systemUptime - startTime > Interpreter.maxSeconds {
+            if Platform.cpuSeconds() > Interpreter.maxCPUSeconds {
                 throw RuntimeError(line: line, "execution limit exceeded")
             }
-            var usage = rusage()
-            #if os(Linux)
-            let result = getrusage(RUSAGE_SELF.rawValue, &usage)
-            #else
-            let result = getrusage(RUSAGE_SELF, &usage)
-            #endif
-            if result == 0 {
-                #if os(Linux)
-                let residentBytes = Int(usage.ru_maxrss) * 1024
-                #else
-                let residentBytes = Int(usage.ru_maxrss)
-                #endif
-                if residentBytes > Interpreter.maxResidentBytes {
-                    throw RuntimeError(line: line, "memory limit exceeded")
-                }
-            }
+            try measureMemory(line)
         }
     }
 
-    private func charge(_ bytes: Int, line: Int) throws {
-        if bytes > Interpreter.maxAllocatedBytes - allocatedBytes {
+    private func measureMemory(_ line: Int) throws {
+        allocatedSinceMeasure = 0
+        if let residentBytes = Platform.peakResidentBytes(),
+           residentBytes > Interpreter.maxResidentBytes {
             throw RuntimeError(line: line, "memory limit exceeded")
         }
-        allocatedBytes += bytes
+    }
+
+    /// Anota bytes que se van a asignar. No es un total acumulado (lo liberado no se
+    /// descontaría): solo adelanta la medición real cuando se asigna mucho de golpe.
+    private func charge(_ bytes: Int, line: Int) throws {
+        allocatedSinceMeasure += bytes
+        if allocatedSinceMeasure >= Interpreter.measureEveryBytes { try measureMemory(line) }
     }
 
     private func evalLogical(
@@ -497,15 +531,25 @@ final class Interpreter {
     }
 
     private func concat(_ left: Value, _ right: Value, line: Int) throws -> Value {
-        guard let a = displayLimited(left, maxBytes: Interpreter.maxValueBytes),
-              let b = displayLimited(right, maxBytes: Interpreter.maxValueBytes) else {
+        var a = try concatOperand(left, line: line)
+        try append(concatOperand(right, line: line), to: &a, line: line)
+        return .string(a)
+    }
+
+    private func concatOperand(_ value: Value, line: Int) throws -> String {
+        if case .string(let text) = value { return text }
+        guard let text = displayLimited(value, maxBytes: Interpreter.maxValueBytes) else {
             throw RuntimeError(line: line, "text limit exceeded")
         }
+        return text
+    }
+
+    private func append(_ b: String, to a: inout String, line: Int) throws {
         if a.utf8.count > Interpreter.maxValueBytes - b.utf8.count {
             throw RuntimeError(line: line, "text limit exceeded")
         }
-        try charge(a.utf8.count + b.utf8.count, line: line)
-        return .string(a + b)
+        try charge(b.utf8.count, line: line)
+        a.append(b)
     }
 
     private func real(_ result: Double, line: Int) throws -> Value {

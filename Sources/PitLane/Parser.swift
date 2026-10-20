@@ -12,9 +12,24 @@ final class Parser {
     private var pos = 0
     private var nesting = 0
     private var unaryNesting = 0
+    /// Bucles abiertos dentro de la función actual y funciones abiertas, para validar
+    /// bandera_roja, pit_stop y meta al analizar.
+    private var loopDepth = 0
+    private var functionDepth = 0
 
+    /// Dentro de (...) y [...] un salto de línea no termina la sentencia: se descarta para
+    /// poder repartir listas, argumentos y parámetros en varias líneas.
     init(tokens: [Token]) {
-        self.tokens = tokens
+        var depth = 0
+        self.tokens = tokens.filter { token in
+            switch token.type {
+            case .lparen, .lbracket: depth += 1
+            case .rparen, .rbracket: depth = max(0, depth - 1)
+            case .newline: return depth == 0
+            default: break
+            }
+            return true
+        }
     }
 
     // MARK: - Utilidades
@@ -123,12 +138,16 @@ final class Parser {
         case .kwVuelta: kind = try parseWhile()
         case .kwCircuito: kind = try parseFor()
         case .kwBanderaRoja:
+            guard loopDepth > 0 else { throw error("'bandera_roja' outside loop") }
             advance()
             kind = .breakStmt
         case .kwPitStop:
+            guard loopDepth > 0 else { throw error("'pit_stop' outside loop") }
             advance()
             kind = .continueStmt
-        case .kwMeta: kind = try parseReturn()
+        case .kwMeta:
+            guard functionDepth > 0 else { throw error("'meta' outside function") }
+            kind = try parseReturn()
         case .kwTransmision: kind = try parsePrint()
         case .kwBoxes: kind = .function(try parseFunction())
         case .kwEscuderia: kind = .classDecl(try parseClass())
@@ -195,7 +214,7 @@ final class Parser {
         advance()  // vuelta
         let condition = try parseExpr()
         try expect(.colon)
-        let body = try parseBlock()
+        let body = try parseLoopBody()
         try expect(.kwBanderaCuadros)
         return .whileLoop(condition: condition, body: body)
     }
@@ -208,9 +227,27 @@ final class Parser {
         try expect(.kwLlegada)
         let to = try parseExpr()
         try expect(.colon)
-        let body = try parseBlock()
+        let body = try parseLoopBody()
         try expect(.kwBanderaCuadros)
         return .forLoop(variable: variable, from: from, to: to, body: body)
+    }
+
+    private func parseLoopBody() throws -> Block {
+        loopDepth += 1
+        defer { loopDepth -= 1 }
+        return try parseBlock()
+    }
+
+    /// Cuerpo de boxes o ensamble: admite meta, y un bucle exterior no vale para bandera_roja.
+    private func parseFunctionBody() throws -> Block {
+        let outerLoopDepth = loopDepth
+        loopDepth = 0
+        functionDepth += 1
+        defer {
+            loopDepth = outerLoopDepth
+            functionDepth -= 1
+        }
+        return try parseBlock()
     }
 
     private func parseReturn() throws -> StmtKind {
@@ -231,9 +268,15 @@ final class Parser {
 
     private func parseParams() throws -> [String] {
         var params: [String] = []
+        func add(_ param: Token) throws {
+            if params.contains(param.lexeme) {
+                throw SyntaxError(line: param.line, message: "duplicate parameter '\(param.lexeme)'")
+            }
+            params.append(param.lexeme)
+        }
         if currentType == .id {
-            params.append(advance().lexeme)
-            while match(.comma) { params.append(try expect(.id).lexeme) }
+            try add(advance())
+            while match(.comma) { try add(try expect(.id)) }
         }
         return params
     }
@@ -245,7 +288,7 @@ final class Parser {
         let params = try parseParams()
         try expect(.rparen)
         try expect(.colon)
-        let body = try parseBlock()
+        let body = try parseFunctionBody()
         try expect(.kwBanderaCuadros)
         return FunctionDecl(name: name, params: params, body: body, line: line)
     }
@@ -264,7 +307,11 @@ final class Parser {
                 constructor = try parseConstructor()
                 try endOfStatement()
             case .kwBoxes:
-                methods.append(try parseFunction())
+                let method = try parseFunction()
+                if methods.contains(where: { $0.name == method.name }) {
+                    throw SyntaxError(line: method.line, message: "duplicate method '\(method.name)'")
+                }
+                methods.append(method)
                 try endOfStatement()
             default:
                 try expect(.kwBanderaCuadros)
@@ -279,7 +326,7 @@ final class Parser {
         let params = try parseParams()
         try expect(.rparen)
         try expect(.colon)
-        let body = try parseBlock()
+        let body = try parseFunctionBody()
         try expect(.kwBanderaCuadros)
         return ConstructorDecl(params: params, body: body, line: line)
     }
