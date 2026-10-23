@@ -1,12 +1,13 @@
 import Foundation
 
-/// Errores de uso de la línea de comandos: van por stderr.
+// errores al usar el comando mal (faltan argumentos, no existe el archivo...). Van por stderr
 func failUsage(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
     exit(1)
 }
 
-/// Errores léxicos, de sintaxis y de ejecución: van por stdout, en orden con la salida del programa.
+// errores lexicos, de sintaxis y de ejecucion. Van por stdout para que salgan
+// en orden con lo que ya imprimio el programa
 func fail(_ message: String) -> Never {
     print(message)
     fflush(stdout)
@@ -23,8 +24,8 @@ guard arguments.count == 1 else {
     failUsage("Usage: PitLane [--solo-salida] <archivo.txt>")
 }
 
-/// Tope de tiempo de CPU del intérprete. El propio intérprete se detiene antes (a los 4 s,
-/// con la línea); este tope solo actúa si algo no llegara a revisarlo.
+// maximo de CPU. El interprete ya se corta solo a los 4 s (diciendo la linea),
+// esto es por si acaso algo se escapa
 let maxCPUSeconds = 5
 
 if ProcessInfo.processInfo.environment["PITLANE_WORKER"] != "1" {
@@ -78,7 +79,8 @@ func header(_ title: String, first: Bool = false) {
     print("=== \(title) ===")
 }
 
-/// Los strings ya interpretados se muestran con sus escapes para mantener una sola línea por token.
+// para imprimir un string en la lista de tokens volvemos a poner los \n, \t...
+// asi cada token queda en una sola linea
 func printable(_ token: Token) -> String {
     guard token.type == .string else { return token.lexeme }
     var out = ""
@@ -132,8 +134,8 @@ func runPipeline() {
     }
 }
 
-// Pila amplia para que la recursión llegue a "stack overflow" (1000 llamadas) sin que
-// se desborde la pila nativa; el control de memoria residente corta antes de agotarla.
+// Corremos todo en un hilo con una pila grande. Si no, con muchas llamadas recursivas
+// Swift se caeria antes de llegar a nuestro error de "stack overflow" (1000 llamadas)
 let pipelineDone = DispatchSemaphore(value: 0)
 let pipelineThread = Thread {
     runPipeline()

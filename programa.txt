@@ -1,0 +1,95 @@
+parrilla mejor_puntaje acelera 0
+parrilla campeon acelera 0
+parrilla pilotos_excelentes acelera 0
+parrilla suma_general acelera 0
+
+transmision("================================")
+transmision("CAMPEONATO PITLANE")
+transmision("================================")
+
+circuito piloto salida 1 llegada 8:
+    transmision("------------------------")
+    transmision("PILOTO")
+    transmision(piloto)
+
+    parrilla puntos acelera 0
+    parrilla victorias acelera 0
+    parrilla podios acelera 0
+    parrilla penalizaciones acelera 0
+
+    circuito carrera salida 1 llegada 6:
+        transmision("CARRERA")
+        transmision(carrera)
+
+        parrilla rendimiento acelera piloto * 7 + carrera * 11
+
+        bandera_verde rendimiento supera 75:
+            puntos acelera puntos + 25
+            victorias acelera victorias + 1
+            podios acelera podios + 1
+            transmision("VICTORIA")
+        bandera_azul:
+            bandera_verde rendimiento supera 50:
+                puntos acelera puntos + 18
+                podios acelera podios + 1
+                transmision("PODIO")
+            bandera_azul:
+                bandera_verde rendimiento supera 30:
+                    puntos acelera puntos + 10
+                    transmision("ZONA DE PUNTOS")
+                bandera_azul:
+                    puntos acelera puntos + 2
+                    transmision("RESULTADO BAJO")
+                bandera_cuadros
+            bandera_cuadros
+        bandera_cuadros
+
+        bandera_verde 35 supera rendimiento:
+            penalizaciones acelera penalizaciones + 1
+            puntos acelera puntos - 3
+            transmision("PENALIZACION")
+        bandera_cuadros
+
+    bandera_cuadros
+
+    transmision("PUNTOS FINALES")
+    transmision(puntos)
+    transmision("VICTORIAS")
+    transmision(victorias)
+    transmision("PODIOS")
+    transmision(podios)
+    transmision("PENALIZACIONES")
+    transmision(penalizaciones)
+
+    bandera_verde puntos supera 100:
+        transmision("TEMPORADA EXCELENTE")
+        pilotos_excelentes acelera pilotos_excelentes + 1
+    bandera_azul:
+        bandera_verde puntos supera 60:
+            transmision("TEMPORADA BUENA")
+        bandera_azul:
+            transmision("TEMPORADA REGULAR")
+        bandera_cuadros
+    bandera_cuadros
+
+    bandera_verde puntos supera mejor_puntaje:
+        mejor_puntaje acelera puntos
+        campeon acelera piloto
+    bandera_cuadros
+
+    suma_general acelera suma_general + puntos
+
+bandera_cuadros
+
+transmision("================================")
+transmision("RESULTADOS DEL CAMPEONATO")
+transmision("================================")
+transmision("CAMPEON")
+transmision(campeon)
+transmision("PUNTAJE DEL CAMPEON")
+transmision(mejor_puntaje)
+transmision("PUNTOS TOTALES")
+transmision(suma_general)
+transmision("TEMPORADAS EXCELENTES")
+transmision(pilotos_excelentes)
+transmision("SIMULACION FINALIZADA")

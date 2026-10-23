@@ -69,7 +69,7 @@ enum Value {
     }
 }
 
-/// Reglas de impresión del lenguaje. `quoted` pone comillas a los textos (dentro de listas).
+// como se imprime cada valor. quoted = true para poner comillas a los textos dentro de listas
 func display(_ value: Value, quoted: Bool = false) -> String {
     displayLimited(value, maxBytes: 1_000_000, quoted: quoted) ?? "<value too large>"
 }
@@ -120,7 +120,8 @@ private func appendDisplay(_ value: Value, quoted: Bool, active: inout Set<Objec
     }
 }
 
-/// empata/distinto: entero y real se comparan numéricamente, listas por contenido, objetos por identidad.
+// para empata/distinto. 3 empata 3.0 es gana, las listas se comparan por lo que tienen
+// y los objetos solo si son el mismo
 private struct ListPair: Hashable {
     let left: ObjectIdentifier
     let right: ObjectIdentifier

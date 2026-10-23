@@ -5,20 +5,20 @@ struct SyntaxError: Error {
     var description: String { "Syntax error on line \(line): \(message)" }
 }
 
-/// Descenso recursivo: una función por regla, según la gramática EBNF de PitLane.
+// Parser de descenso recursivo: hay una funcion por cada regla de la gramatica
 final class Parser {
     private static let maxNesting = 128
     private let tokens: [Token]
     private var pos = 0
     private var nesting = 0
     private var unaryNesting = 0
-    /// Bucles abiertos dentro de la función actual y funciones abiertas, para validar
-    /// bandera_roja, pit_stop y meta al analizar.
+    // contadores para saber si estamos dentro de un bucle o de una funcion
+    // (sirven para dar error con bandera_roja, pit_stop o meta mal puestos)
     private var loopDepth = 0
     private var functionDepth = 0
 
-    /// Dentro de (...) y [...] un salto de línea no termina la sentencia: se descarta para
-    /// poder repartir listas, argumentos y parámetros en varias líneas.
+    // si estamos dentro de ( ) o [ ] ignoramos los saltos de linea,
+    // asi se puede escribir una lista o los argumentos en varias lineas
     init(tokens: [Token]) {
         var depth = 0
         self.tokens = tokens.filter { token in
@@ -52,7 +52,7 @@ final class Parser {
     private var current: Token? { pos < tokens.count ? tokens[pos] : nil }
     private var currentType: TokenType? { current?.type }
 
-    /// Línea del token actual; al fin del archivo, la del último token real.
+    // linea del token actual (si ya se acabo el archivo, la del ultimo token)
     private var errorLine: Int {
         if let t = current { return t.line }
         return tokens.last(where: { $0.type != .newline })?.line ?? tokens.last?.line ?? 1
@@ -108,7 +108,7 @@ final class Parser {
         return Program(statements: statements)
     }
 
-    /// Termina (sin consumir) en un cierre de bloque o en el fin del archivo.
+    // lee sentencias hasta encontrar algo que cierre el bloque o el fin del archivo (no lo consume)
     private func parseBlock() throws -> Block {
         nesting += 1
         defer { nesting -= 1 }
@@ -162,8 +162,8 @@ final class Parser {
         return .declaration(isConstant: isConstant, name: name, initial: initial)
     }
 
-    /// Parsea primero un postfijo; si sigue "acelera" es asignación, si no se
-    /// reinterpreta toda la sentencia como una expresión (llamada suelta).
+    // Leemos primero la parte izquierda. Si despues viene acelera es una asignacion,
+    // si no, toda la linea se toma como expresion (una llamada suelta)
     private func parseAssignmentOrCall() throws -> StmtKind {
         let start = pos
         let lhs = try parsePostfix()
@@ -232,7 +232,8 @@ final class Parser {
         return try parseBlock()
     }
 
-    /// Cuerpo de boxes o ensamble: admite meta, y un bucle exterior no vale para bandera_roja.
+    // cuerpo de una funcion o de ensamble. Aqui si se puede usar meta, pero un bucle
+    // de afuera no cuenta para bandera_roja
     private func parseFunctionBody() throws -> Block {
         let outerLoopDepth = loopDepth
         loopDepth = 0
@@ -370,7 +371,7 @@ final class Parser {
         try parseBinary([.star: .mul, .slash: .div, .percent: .mod], next: parseUnary)
     }
 
-    /// Nivel binario asociativo a la izquierda.
+    // sirve para todos los niveles de operadores binarios (asocian a la izquierda)
     private func parseBinary(
         _ ops: [TokenType: BinaryOp], next: () throws -> Expr
     ) throws -> Expr {
@@ -419,7 +420,7 @@ final class Parser {
         return expr
     }
 
-    /// args = expr { "," expr }, opcional, y consume el delimitador de cierre.
+    // lee los argumentos separados por coma (pueden ser cero) y el ) o ] del final
     private func parseArgs(closing: TokenType) throws -> [Expr] {
         var args: [Expr] = []
         if match(closing) { return args }

@@ -4,13 +4,12 @@ final class Interpreter {
     private static let maxCallDepth = 1000
     private static let maxNesting = 128
     private static let maxSteps = 100_000_000
-    /// Segundos de CPU: no cuentan la espera de `radio()`. Va antes del tope de 5 s de
-    /// main.swift para poder informar la línea del bucle.
+    // 4 s y no 5 para cortar antes que main.swift y asi poder decir en que linea iba.
+    // Esperar en radio() no cuenta porque no gasta CPU
     private static let maxCPUSeconds = 4.0
     private static let maxOutputBytes = 1_000_000
     private static let maxValueBytes = 1_000_000
-    /// El límite de memoria es el pico de memoria residente; se mide cada 256 pasos y
-    /// también en cuanto se asignan `measureEveryBytes` desde la última medición.
+    // la memoria se revisa cada 256 pasos, o antes si se pidieron muchos bytes de golpe
     private static let maxResidentBytes = 256 * 1024 * 1024
     private static let measureEveryBytes = 16 * 1024 * 1024
 
@@ -46,8 +45,8 @@ final class Interpreter {
         return .normal
     }
 
-    /// Registra boxes y escuderia del bloque antes de ejecutarlo, para poder usarlos
-    /// antes de su definición. Las variables (parrilla/pole) no se elevan.
+    // Primero registramos las funciones y clases del bloque para poder llamarlas
+    // aunque esten definidas mas abajo. Con parrilla/pole no se hace esto
     private func hoistDeclarations(_ statements: Block, _ env: Environment) throws {
         for statement in statements {
             switch statement.kind {
@@ -157,7 +156,7 @@ final class Interpreter {
             return .normal
 
         case .function, .classDecl:
-            return .normal  // ya registradas por hoistDeclarations
+            return .normal  // ya se registro antes en hoistDeclarations
 
         case .tryCatch(let body, let errorName, let handler, let finallyBlock):
             var result = Completion.normal
@@ -173,7 +172,7 @@ final class Interpreter {
                     pending = error
                 }
             }
-            // podio siempre se ejecuta; si termina de forma abrupta, reemplaza lo pendiente.
+            // podio corre siempre. Si podio hace break/return/throw, eso gana sobre lo que venia
             if let finallyBlock = finallyBlock {
                 let completion = try execBlock(finallyBlock, Environment(parent: env))
                 if case .normal = completion {} else {
@@ -230,8 +229,8 @@ final class Interpreter {
         }
     }
 
-    /// Si `expr` es `name + e1 + e2 + ...` (asociativo a la izquierda), devuelve cada `e`
-    /// con la línea de su `+`, en orden de evaluación.
+    // Revisa si la expresion es de la forma name + e1 + e2 + ...
+    // y si es asi devuelve e1, e2... (cada uno con la linea de su +)
     private func appendedOperands(_ expr: Expr, to name: String) -> [(expr: Expr, line: Int)]? {
         var operands: [(expr: Expr, line: Int)] = []
         var node = expr
@@ -243,9 +242,9 @@ final class Interpreter {
         return nil
     }
 
-    /// `x acelera x + e1 + e2 ...` con x texto: mismo resultado y mismos errores que evaluar la
-    /// suma, pero x crece en su lugar en vez de copiarse en cada vuelta de un bucle.
-    /// `text` es el valor de x antes de evaluar los operandos.
+    // Optimizacion para x acelera x + algo cuando x es texto: en vez de copiar el texto
+    // en cada vuelta del bucle se le agrega al final. Da lo mismo que la suma normal.
+    // text = valor de x antes de evaluar lo demas
     private func appendInPlace(
         _ name: String, _ text: inout String, _ operands: [(expr: Expr, line: Int)],
         _ env: Environment, line: Int
@@ -262,8 +261,8 @@ final class Interpreter {
             try charge(part.utf8.count, line: plusLine)
             parts.append(part)
         }
-        // Se suelta la referencia del ámbito para que `text` sea el único dueño y crezca en
-        // su lugar. Una constante falla aquí, antes de cambiar nada.
+        // quitamos x del ambito un momento para que text no se copie al crecer.
+        // si x es pole falla aqui, antes de cambiar algo
         try env.assign(name, .none, line: line)
         for part in parts { text.append(part) }
         try env.assign(name, .string(text), line: line)
@@ -410,8 +409,8 @@ final class Interpreter {
         }
     }
 
-    /// Anota bytes que se van a asignar. No es un total acumulado (lo liberado no se
-    /// descontaría): solo adelanta la medición real cuando se asigna mucho de golpe.
+    // suma los bytes que se van a pedir, solo sirve para medir la memoria antes
+    // cuando se pide mucho de una vez (no es el total real)
     private func charge(_ bytes: Int, line: Int) throws {
         allocatedSinceMeasure += bytes
         if allocatedSinceMeasure >= Interpreter.measureEveryBytes { try measureMemory(line) }
@@ -476,7 +475,7 @@ final class Interpreter {
         guard args.count == params.count else {
             throw RuntimeError(line: line, "expected \(params.count) arguments but got \(args.count)")
         }
-        // El límite de anidamiento es por función; la recursión la limita maxCallDepth.
+        // cada funcion empieza su conteo de anidamiento, la recursion ya la controla maxCallDepth
         callDepth += 1
         let savedLoopDepth = loopDepth
         let savedBlockDepth = blockDepth

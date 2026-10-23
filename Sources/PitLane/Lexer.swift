@@ -25,13 +25,13 @@ struct Lexer {
         return a >= 48 && a <= 57
     }
 
-    /// Inicio de ID: [\p{L}_]
+    // un ID empieza con letra (tambien ñ y tildes) o _
     private static func isLetter(_ c: Character?) -> Bool {
         guard let c = c else { return false }
         return c == "_" || c.isLetter
     }
 
-    /// Resto de un ID: [\p{L}\p{N}_]
+    // despues puede tener letras, numeros o _
     private static func isWordPart(_ c: Character?) -> Bool {
         guard let c = c else { return false }
         return c == "_" || c.isLetter || c.isNumber
@@ -75,7 +75,7 @@ struct Lexer {
 
     private mutating func readString() throws -> Token {
         let startLine = line
-        pos += 1  // comilla de apertura
+        pos += 1  // saltamos la comilla "
         var text = ""
         while let c = peek() {
             if c == "\"" {
@@ -103,7 +103,7 @@ struct Lexer {
         throw LexicalError(line: startLine, message: "unterminated string")
     }
 
-    /// REAL ([0-9]+\.[0-9]+) se prueba antes que INT.
+    // primero miramos si es real (tiene punto y numeros despues), si no es entero
     private mutating func readNumber() -> Token {
         let start = pos
         while Lexer.isDigit(peek()) { pos += 1 }

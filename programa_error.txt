@@ -1,0 +1,21 @@
+parrilla total acelera 100
+parrilla divisor acelera 5
+
+circuito i salida 1 llegada 10:
+    transmision("Iniciando iteracion")
+    transmision(i)
+
+    bandera_verde i supera 3:
+        total acelera total + i * 2
+        divisor acelera divisor - 1
+
+        bandera_verde divisor igual 0:
+            transmision("Calculando resultado critico")
+            parrilla resultado acelera total / divisor
+            transmision(resultado)
+        bandera_cuadros
+    bandera_cuadros
+
+bandera_cuadros
+
+transmision("Programa finalizado correctamente")

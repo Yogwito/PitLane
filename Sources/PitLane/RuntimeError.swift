@@ -1,5 +1,5 @@
-/// Excepción de PitLane: la lanza `penalizacion` o un error de ejecución.
-/// Para un error de ejecución, `value` es el texto del mensaje sin prefijo.
+// Error que puede atrapar accidente. Sale de un penalizacion o de un error al ejecutar.
+// Si es error de ejecucion, value es solo el mensaje (ej: "division by zero")
 struct RuntimeError: Error {
     let value: Value
     let line: Int
@@ -14,7 +14,7 @@ struct RuntimeError: Error {
     }
 }
 
-/// Señales de control, distintas de las excepciones: `accidente` no las captura.
+// bandera_roja, pit_stop y meta. Van aparte de los errores para que accidente no las atrape
 enum Completion {
     case normal
     case breakLoop

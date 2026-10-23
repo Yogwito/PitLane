@@ -10,9 +10,9 @@ import ucrt
 import WinSDK
 #endif
 
-/// Lo que depende del sistema operativo queda aquí; el resto del intérprete solo usa Foundation.
+// Todo lo que cambia segun el sistema operativo (mac, linux, windows) lo pusimos aqui
 enum Platform {
-    /// Pico de memoria residente del proceso, en bytes, o nil si no se puede medir.
+    // maximo de memoria que ha usado el proceso (en bytes). nil si no se puede saber
     static func peakResidentBytes() -> Int? {
         #if os(Windows)
         var counters = PROCESS_MEMORY_COUNTERS()
@@ -24,16 +24,15 @@ enum Platform {
         var usage = rusage()
         #if os(Linux)
         guard getrusage(RUSAGE_SELF.rawValue, &usage) == 0 else { return nil }
-        return Int(usage.ru_maxrss) * 1024  // Linux informa KiB
+        return Int(usage.ru_maxrss) * 1024  // linux lo da en KB
         #else
         guard getrusage(RUSAGE_SELF, &usage) == 0 else { return nil }
-        return Int(usage.ru_maxrss)  // macOS informa bytes
+        return Int(usage.ru_maxrss)  // mac lo da en bytes
         #endif
         #endif
     }
 
-    /// Tiempo de CPU (usuario + sistema) consumido por este proceso, en segundos.
-    /// Esperar el teclado o la salida no consume CPU, así que no cuenta.
+    // segundos de CPU que lleva el proceso. Si esta esperando el teclado no cuenta
     static func cpuSeconds() -> Double {
         #if os(Windows)
         return cpuSeconds(ofProcessHandle: GetCurrentProcess()) ?? 0
@@ -54,12 +53,12 @@ enum Platform {
         var creation = FILETIME(), exit = FILETIME(), kernel = FILETIME(), user = FILETIME()
         guard GetProcessTimes(handle, &creation, &exit, &kernel, &user) else { return nil }
         func ticks(_ t: FILETIME) -> UInt64 { UInt64(t.dwHighDateTime) << 32 | UInt64(t.dwLowDateTime) }
-        return Double(ticks(kernel) + ticks(user)) / 10_000_000  // unidades de 100 ns
+        return Double(ticks(kernel) + ticks(user)) / 10_000_000  // windows cuenta en pedazos de 100 ns
     }
     #endif
 
-    /// Tope de CPU del proceso intérprete. En macOS y Linux lo aplica el sistema operativo
-    /// (SIGXCPU); en Windows lo vigila el supervisor en `waitForExit`.
+    // limite de CPU. En mac y linux lo pone el sistema (SIGXCPU),
+    // en windows no se puede asi que lo revisa waitForExit
     static func limitCPUTime(seconds: Int) -> Bool {
         #if os(Windows)
         return true
@@ -74,7 +73,7 @@ enum Platform {
         #endif
     }
 
-    /// Espera a que termine el intérprete; devuelve true si se detuvo por agotar `cpuLimit` segundos de CPU.
+    // espera a que el proceso hijo termine. true = lo matamos por pasarse de tiempo
     static func waitForExit(_ process: Process, cpuLimit: Int) -> Bool {
         #if os(Windows)
         let handle = OpenProcess(
@@ -96,7 +95,7 @@ enum Platform {
         #endif
     }
 
-    /// Límites que impone el sistema operativo al proceso intérprete (solo Linux).
+    // limites que pone el sistema operativo (esto solo aplica en linux)
     static func limitAddressSpace(bytes: Int) -> Bool {
         #if os(Linux)
         let resource = __rlimit_resource_t(RLIMIT_AS.rawValue)
@@ -107,8 +106,7 @@ enum Platform {
         #endif
     }
 
-    /// Salida sin búfer y con saltos de línea LF: en Windows stdout abre en modo texto
-    /// y convertiría cada salto de línea en CRLF.
+    // stdout sin buffer. En windows ademas toca evitar que cambie \n por \r\n
     static func configureStdout() {
         #if os(Windows)
         _ = _setmode(_fileno(stdout), _O_BINARY)

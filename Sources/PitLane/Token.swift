@@ -32,7 +32,7 @@ struct Token {
     let line: Int
 }
 
-/// Palabra del vocabulario -> tipo de token. Todo lo demás es ID.
+// tabla de palabras reservadas. Si una palabra no esta aqui es un ID
 let keywords: [String: TokenType] = [
     "parrilla": .kwParrilla, "pole": .kwPole, "acelera": .kwAcelera,
     "bandera_verde": .kwBanderaVerde, "bandera_amarilla": .kwBanderaAmarilla,

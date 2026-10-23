@@ -33,7 +33,7 @@ indirect enum ExprKind {
     case readLine                             // radio()
 }
 
-/// Destino de una asignación.
+// lo que va a la izquierda de acelera
 indirect enum Target {
     case variable(String)
     case index(base: Expr, index: Expr)
@@ -73,7 +73,7 @@ struct Stmt {
 indirect enum StmtKind {
     case declaration(isConstant: Bool, name: String, initial: Expr?)
     case assignment(target: Target, value: Expr)
-    /// bandera_verde + bandera_amarilla* (branches) y bandera_azul opcional.
+    // branches = el bandera_verde y cada bandera_amarilla, elseBody = el bandera_azul (si hay)
     case conditional(branches: [Branch], elseBody: Block?)
     case whileLoop(condition: Expr, body: Block)
     case forLoop(variable: String, from: Expr, to: Expr, body: Block)
