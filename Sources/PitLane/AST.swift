@@ -11,8 +11,6 @@ enum UnaryOp: String {
     case not = "contra", neg = "-"
 }
 
-// MARK: - Expresiones
-
 struct Expr {
     let kind: ExprKind
     let line: Int
@@ -34,8 +32,6 @@ indirect enum ExprKind {
     case new(className: String, args: [Expr]) // debut
     case readLine                             // radio()
 }
-
-// MARK: - Sentencias
 
 /// Destino de una asignación.
 indirect enum Target {

@@ -31,8 +31,6 @@ final class Interpreter {
         _ = try execBlock(program.statements, Environment(parent: globals))
     }
 
-    // MARK: - Sentencias
-
     private func execBlock(_ statements: Block, _ env: Environment) throws -> Completion {
         blockDepth += 1
         defer { blockDepth -= 1 }
@@ -278,8 +276,6 @@ final class Interpreter {
         return i
     }
 
-    // MARK: - Expresiones
-
     private func eval(_ expr: Expr, _ env: Environment) throws -> Value {
         let line = expr.line
         try tick(line)
@@ -508,8 +504,6 @@ final class Interpreter {
         return .none
     }
 
-    // MARK: - Operadores binarios
-
     private func binary(_ op: BinaryOp, _ left: Value, _ right: Value, line: Int) throws -> Value {
         switch op {
         case .add:
@@ -627,8 +621,6 @@ final class Interpreter {
             return test(a, b)
         }
     }
-
-    // MARK: - Funciones predefinidas
 
     private func installBuiltins() {
         func define(_ name: String, _ arity: Int, _ body: @escaping ([Value], Int) throws -> Value) {

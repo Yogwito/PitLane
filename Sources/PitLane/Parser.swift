@@ -32,8 +32,6 @@ final class Parser {
         }
     }
 
-    // MARK: - Utilidades
-
     private static let blockEnd: Set<TokenType> = [
         .kwBanderaCuadros, .kwBanderaAmarilla, .kwBanderaAzul, .kwAccidente, .kwPodio,
     ]
@@ -96,8 +94,6 @@ final class Parser {
         guard match(.newline) else { throw error("expected end of line") }
     }
 
-    // MARK: - Programa y bloques
-
     func parseProgram() throws -> Program {
         var statements: Block = []
         while true {
@@ -125,8 +121,6 @@ final class Parser {
             try endOfStatement()
         }
     }
-
-    // MARK: - Sentencias
 
     private func parseStatement() throws -> Stmt {
         guard let t = current else { throw error("expected statement") }
@@ -347,8 +341,6 @@ final class Parser {
         try expect(.kwBanderaCuadros)
         return .tryCatch(body: body, errorName: errorName, handler: handler, finally: finally)
     }
-
-    // MARK: - Expresiones (de menor a mayor precedencia)
 
     func parseExpr() throws -> Expr {
         nesting += 1
