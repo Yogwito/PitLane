@@ -1,11 +1,11 @@
 # PitLane
 
-PitLane es un lenguaje de programación pequeño con vocabulario de Fórmula 1. Su base es Swift: se interpreta (análisis léxico, análisis sintáctico e intérprete) y todo el procesador está escrito en Swift. Los programas son archivos de texto `.txt`.
+Intérprete del lenguaje PitLane, escrito en Swift. Los programas son archivos de texto `.txt`.
 
 ## Requisitos
 
-- Swift 5.9 como versión mínima del paquete y de las pruebas. También se verifica con Swift 6.4 en macOS; las versiones anteriores a 5.9 se rechazan al ejecutar `probar.sh`.
-- macOS, Linux o Windows. En Windows, `probar.sh` se ejecuta desde Git Bash; si `swift build` no puede crear el enlace `.build/debug`, el ejecutable queda en la ruta que indica `swift build --show-bin-path`.
+- Swift 5.9 o superior.
+- macOS, Linux o Windows. En Windows, `probar.sh` se ejecuta desde Git Bash.
 
 ## Compilar y ejecutar
 
@@ -43,162 +43,14 @@ swift run PitLane --solo-salida ejemplos/p10_entrada.txt < ejemplos/p10_entrada.
 
 Un error en cualquier fase detiene el proceso con código de salida 1.
 
+En Windows, si `swift build` no puede crear el enlace `.build/debug`, el ejecutable queda en la ruta que indica `swift build --show-bin-path`.
+
 ## Pruebas
 
 ```sh
-./probar.sh
-./probar.sh --release
-./probar.sh --watch
+./probar.sh             # compila en modo desarrollo y corre todas las pruebas
+./probar.sh --release   # lo mismo, con el binario de publicación
+./probar.sh --watch     # repite ambas cada vez que cambia un archivo (Ctrl+C para salir)
 ```
 
-El script compila el proyecto y recorre `ejemplos/`:
-
-- `X.esperado`: ejecuta `X.txt` con `--solo-salida` (usando `X.in` como entrada si existe) y compara la salida. Los archivos `errores_*` además deben terminar con código de salida 1.
-- `X.completo.esperado`: ejecuta `X.txt` sin `--solo-salida` y compara las tres fases completas.
-
-Al final muestra un resumen `N OK, M FALLA` y devuelve un código distinto de 0 si algo falla. Las dos primeras invocaciones ejecutan la misma batería sobre los binarios de desarrollo y de publicación, respectivamente. `--watch` ejecuta ambas y las repite al detectar cambios en los archivos del proyecto mientras siga abierto; se detiene con Ctrl+C. Para validar una entrega en macOS, Linux y Windows, ejecute ambas configuraciones en cada sistema; cualquier código de salida distinto de cero rechaza el cambio.
-
-## Estructura del repositorio
-
-```
-Package.swift
-probar.sh                 script de pruebas
-Sources/PitLane/
-  Token.swift             tipos de token y palabras clave
-  Lexer.swift             análisis léxico
-  AST.swift               nodos del árbol sintáctico
-  Parser.swift            análisis sintáctico (descenso recursivo)
-  Value.swift             valores del lenguaje y reglas de impresión
-  Environment.swift       ámbitos y variables
-  RuntimeError.swift      errores de ejecución y señales de control
-  Interpreter.swift       ejecución del árbol
-  SourceDecoding.swift    lectura del archivo fuente (UTF-8 con o sin BOM, Windows-1252)
-  Platform.swift          lo que depende del sistema operativo (memoria, tiempo de CPU)
-  main.swift              línea de comandos y fases
-ejemplos/
-  programa1..3.txt        programas de ejemplo
-  p04..p15_*.txt          una prueba por requisito (tipos, bucles, listas,
-                          funciones, clases, excepciones, entrada, uso antes
-                          de la definición, escapes, Unicode, tokens,
-                          estructuras en varias líneas)
-  errores_lexicos*.txt    errores léxicos
-  errores_sintaxis*.txt   errores de sintaxis
-  errores_ejecucion*.txt  errores de ejecución
-  *.esperado              salida esperada de cada programa
-  *.in                    entrada estándar para los programas que leen
-```
-
-## Vocabulario (PitLane = Swift)
-
-| PitLane | Swift | PitLane | Swift |
-|---|---|---|---|
-| `parrilla` | `var` | `escuderia` | `class` |
-| `pole` | `let` | `ensamble` | `init` |
-| `acelera` | `=` | `debut` | crear objeto |
-| `bandera_verde` | `if` | `auto` | `self` |
-| `bandera_amarilla` | `else if` | `safety_car` | `do` / `try` |
-| `bandera_azul` | `else` | `accidente` | `catch` |
-| `vuelta` | `while` | `podio` | `finally` |
-| `circuito` ... `salida` ... `llegada` | `for` con contador | `penalizacion` | `throw` |
-| `bandera_roja` | `break` | `aliado` | `&&` |
-| `pit_stop` | `continue` | `rival` | `\|\|` |
-| `radio` | `readLine` | `contra` | `!` |
-| `transmision` | `print` | `supera` | `>` |
-| `boxes` | `func` | `rezaga` | `<` |
-| `meta` | `return` | `alcanza` | `>=` |
-| `gana` | `true` | `cede` | `<=` |
-| `pierde` | `false` | `empata` | `==` |
-| `bandera_cuadros` | fin de bloque | `distinto` | `!=` |
-
-Los símbolos `+ - * / % ( ) [ ] , : .` no cambian. Los comentarios empiezan con `//` y llegan hasta el fin de línea. Los bloques se cierran siempre con `bandera_cuadros`.
-
-Cada sentencia termina en el fin de línea, salvo dentro de `( )` o `[ ]`: ahí los saltos de línea se ignoran, así que una lista, una llamada o los parámetros de una función se pueden repartir en varias líneas:
-
-```
-parrilla equipos acelera [
-    "Ferrari",
-    "McLaren"
-]
-```
-
-Los archivos fuente pueden estar en UTF-8 (con o sin BOM) o en Windows-1252 ("ANSI" en los editores de Windows).
-
-Reservadas para uso futuro: `filial`, `estrategia`, `neumatico`, `comodin`, `reagrupar`.
-
-## Ejemplo
-
-```
-boxes factorial(n):
-    bandera_verde n cede 1:
-        meta 1
-    bandera_cuadros
-    meta n * factorial(n - 1)
-bandera_cuadros
-circuito i salida 1 llegada 5:
-    transmision("factorial de " + i + " = " + factorial(i))
-bandera_cuadros
-```
-
-Salida:
-
-```
-factorial de 1 = 1
-factorial de 2 = 2
-factorial de 3 = 6
-factorial de 4 = 24
-factorial de 5 = 120
-```
-
-## Detalles del lenguaje
-
-- **Tipos:** entero, real, texto, booleano (`gana` / `pierde`), lista, objeto y función. Una variable declarada sin valor vale `nada`.
-- **Impresión:** los reales siempre llevan punto (`3.0`, `2.5`); las listas se muestran como `[4, 8, 15]`, con los textos entre comillas dobles; los objetos como `<NombreClase>`.
-- **Aritmética:** como en Swift. Entero entre entero es división entera; si algún operando es real, el resultado es real. `+` concatena cuando algún operando es texto.
-- **Textos:** admiten las secuencias `\n`, `\t`, `\"` y `\\`.
-- **Identificadores:** letras (incluidas `ñ` y vocales con tilde), dígitos y `_`, sin empezar por dígito.
-- **Funciones y clases:** se pueden usar antes del punto del archivo donde se definen. Las variables no.
-- **Excepciones:** `penalizacion` lanza cualquier valor; `safety_car` / `accidente` / `podio` captura también los errores de ejecución (el mensaje llega como texto, por ejemplo `division by zero`).
-
-### Funciones predefinidas
-
-| Función | Descripción |
-|---|---|
-| `longitud(x)` | Cantidad de elementos de una lista o de caracteres de un texto |
-| `agregar(lista, valor)` | Agrega un elemento al final de la lista |
-| `a_entero(x)` | Convierte a entero (`a_entero("abc")` es un error de ejecución) |
-| `a_real(x)` | Convierte a real |
-| `a_texto(x)` | Convierte a texto con las reglas de impresión |
-
-## Errores
-
-Los errores léxicos, sintácticos y de ejecución se imprimen por la salida estándar, indican la línea y terminan el proceso con código de salida 1. Lo que el programa ya había impreso se conserva.
-
-El contrato de la línea de comandos es `PitLane [--solo-salida] <archivo.txt>`. La falta de archivo, una ruta ilegible, un archivo que excede el límite o una combinación inválida de argumentos terminan con código 1 y un mensaje por la salida de errores, sin ejecutar el programa. Al invocarse desde otra carpeta o mediante `PATH`, se aplican los mismos resultados y límites. Si `radio()` encuentra el fin de la entrada estándar, devuelve texto vacío. La salida estándar se emite inmediatamente: si se alcanza un límite, se conservan las líneas completas impresas antes.
-
-```
-Lexical error on line 2: unrecognized symbol '#'
-Lexical error on line 3: unterminated string
-Lexical error on line 2: invalid escape sequence '\q'
-Syntax error on line 4: expected 'bandera_cuadros'
-Syntax error on line 3: expected expression
-Syntax error on line 5: 'bandera_roja' outside loop
-Syntax error on line 2: duplicate parameter 'a'
-Runtime error on line 4: division by zero
-```
-
-El análisis sintáctico también rechaza, antes de ejecutar nada, `bandera_roja` o `pit_stop` fuera de un bucle (`'bandera_roja' outside loop`), `meta` fuera de una función o de `ensamble` (`'meta' outside function`), parámetros repetidos (`duplicate parameter 'a'`), métodos repetidos en una `escuderia` (`duplicate method 'm'`) y un segundo `ensamble`. Un bucle exterior no habilita `bandera_roja` dentro de una función definida en él.
-
-Ejemplos de errores de ejecución: `division by zero`, `index out of range`, `undeclared variable 'x'`, `cannot assign to constant 'x'`, `'x' already declared`, `expected N arguments but got M`, `not callable`, `stack overflow`, `undefined attribute 'x'`, `undefined method 'm'`, `undefined class 'X'`, `condition must be boolean`. Una `penalizacion` que nadie captura se informa como `Runtime error on line N:` seguido del valor lanzado.
-
-Para evitar bloqueos y consumo excesivo de recursos, cada archivo fuente puede ocupar hasta 1 000 000 de bytes. El tiempo se mide como tiempo de CPU del intérprete, así que la espera de `radio()` no cuenta: el usuario puede tardar lo que quiera en responder. La ejecución se detiene con `Runtime error on line N: execution limit exceeded` después de 100 000 000 de pasos o de 4 segundos de CPU, indicando la línea en curso. Como respaldo, si algo no llegara a revisar ese límite, el proceso se termina a los 5 segundos de CPU con `Runtime error: time limit exceeded` (en macOS y Linux lo aplica el sistema operativo con `RLIMIT_CPU`; en Windows, el proceso supervisor). El análisis y la ejecución admiten hasta 128 niveles de anidamiento (en la ejecución, dentro de cada función), la recursión hasta 1000 llamadas anidadas (`stack overflow`) y una comparación hasta 1 000 000 de pares de valores. Una línea leída por `radio()`, un texto construido y la salida del programa tienen un límite de 1 000 000 de bytes cada uno. La memoria se limita a 256 MiB de pico de memoria residente (`memory limit exceeded`), medida cada 256 pasos y también en cuanto se asignan 16 MiB desde la última medición; lo que el programa ya liberó no cuenta, así que armar un texto o crear listas temporales en un bucle no agota la memoria. En Linux, el proceso intérprete también tiene un límite de 1 GiB de espacio de direcciones impuesto por el sistema operativo. Al alcanzar un límite se informa un error; las listas cíclicas se muestran con `[<cycle>]`.
-
-En Windows, la salida usa saltos de línea LF igual que en macOS y Linux, y `.gitattributes` mantiene en LF los scripts y los ejemplos para que las comparaciones sean byte a byte.
-
-`./probar.sh` comprueba los ejemplos, casos adversariales, 160 programas generados con resultados esperados (incluidas combinaciones de funciones, listas, bucles y condiciones), transformaciones que conservan la salida, 200 mutaciones de caracteres y casos de ejecución desde `PATH`, entrada cerrada y espera de `radio()` de más de 5 segundos. La generación usa una semilla fija para reproducir los fallos.
-
-La compatibilidad se evalúa contra Swift 5.9. Un cambio de sintaxis, resultados, mensajes de error, límites o códigos de salida exige actualizar esta descripción y los resultados esperados junto con el código. Los archivos de evaluación externos deben ejecutarse con las dos configuraciones; no forman parte de esta batería mientras no se proporcionen.
-
-## Estado
-
-- Implementado: recursión.
-- No implementado: interfaz gráfica, base de datos, herencia, `do-while`, `switch` y errores semánticos en una fase previa a la ejecución. Los errores de tipo, de variables no declaradas y de constantes se detectan al ejecutar.
+Al final se muestra un resumen `N OK, M FALLA`. Si algo falla, el código de salida es distinto de 0.
